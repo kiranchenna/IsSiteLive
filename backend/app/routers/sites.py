@@ -1,0 +1,122 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app import models, schemas
+from app.db import get_db
+
+router = APIRouter(prefix="/api/sites", tags=["sites"])
+
+
+@router.get("", response_model=list[schemas.SiteOut])
+def list_sites(db: Session = Depends(get_db)):
+    return db.query(models.Site).order_by(models.Site.name).all()
+
+
+@router.post("", response_model=schemas.SiteOut, status_code=201)
+def create_site(payload: schemas.SiteCreate, db: Session = Depends(get_db)):
+    site = models.Site(**payload.model_dump())
+    db.add(site)
+    db.commit()
+    db.refresh(site)
+
+    from app.scheduler import schedule_site
+
+    schedule_site(site.id)
+    return site
+
+
+@router.get("/{site_id}", response_model=schemas.SiteOut)
+def get_site(site_id: int, db: Session = Depends(get_db)):
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+    return site
+
+
+@router.put("/{site_id}", response_model=schemas.SiteOut)
+def update_site(site_id: int, payload: schemas.SiteUpdate, db: Session = Depends(get_db)):
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(site, field, value)
+    db.commit()
+    db.refresh(site)
+
+    from app.scheduler import schedule_site, unschedule_site
+
+    if site.is_active:
+        schedule_site(site.id)
+    else:
+        unschedule_site(site.id)
+    return site
+
+
+@router.delete("/{site_id}", status_code=204)
+def delete_site(site_id: int, db: Session = Depends(get_db)):
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+    db.delete(site)
+    db.commit()
+
+    from app.scheduler import unschedule_site
+
+    unschedule_site(site_id)
+
+
+@router.put("/{site_id}/flow", response_model=schemas.FlowOut)
+def upsert_flow(site_id: int, payload: schemas.FlowUpsert, db: Session = Depends(get_db)):
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+    flow = db.query(models.Flow).filter(models.Flow.site_id == site_id).first()
+    if flow:
+        flow.steps_json = payload.steps_json
+        flow.watch_patterns_json = payload.watch_patterns_json
+    else:
+        flow = models.Flow(site_id=site_id, **payload.model_dump())
+        db.add(flow)
+    db.commit()
+    db.refresh(flow)
+    return flow
+
+
+@router.get("/{site_id}/flow", response_model=schemas.FlowOut)
+def get_flow(site_id: int, db: Session = Depends(get_db)):
+    flow = db.query(models.Flow).filter(models.Flow.site_id == site_id).first()
+    if not flow:
+        raise HTTPException(404, "Flow not configured for this site")
+    return flow
+
+
+@router.get("/{site_id}/alert-channels", response_model=list[int])
+def get_site_alert_channels(site_id: int, db: Session = Depends(get_db)):
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+    links = db.query(models.SiteAlertChannel).filter(models.SiteAlertChannel.site_id == site_id).all()
+    return [link.alert_channel_id for link in links]
+
+
+@router.put("/{site_id}/alert-channels", status_code=204)
+def set_site_alert_channels(site_id: int, payload: schemas.SiteAlertChannelsUpdate, db: Session = Depends(get_db)):
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+    db.query(models.SiteAlertChannel).filter(models.SiteAlertChannel.site_id == site_id).delete()
+    for channel_id in payload.alert_channel_ids:
+        db.add(models.SiteAlertChannel(site_id=site_id, alert_channel_id=channel_id))
+    db.commit()
+
+
+@router.post("/{site_id}/run-now", status_code=202)
+async def run_now(site_id: int, db: Session = Depends(get_db)):
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+
+    from app.scheduler import run_site_check
+
+    await run_site_check(site_id)
+    return {"status": "triggered"}
