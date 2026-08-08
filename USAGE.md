@@ -32,6 +32,12 @@ You can add more than one account per site (e.g. `demo-admin` alongside `demo-re
 
 ## 3. Define the login flow
 
+You don't have to write this by hand. **Login flow → Record flow** opens a live view of a real browser — click and type through the actual login exactly as a user would, and each click and typed field is turned into a step automatically, with the typed username/password swapped for `{{username}}`/`{{password}}` placeholders. When you reach the page that proves you're logged in, click **Mark success element** and then click that element (e.g. a dashboard heading or your name in a nav bar) — that becomes the check's success condition. **Save as flow** writes the result into the JSON editor below, where you can still fine-tune it by hand.
+
+The recorder handles navigation, clicks, typed fields, and the success check. It can't record "this error message should *not* be showing" (there's nothing to click on an absent element) or which AJAX calls to watch — add those two by hand afterward, covered next.
+
+If you'd rather write it directly, or want to see what the recorder produced:
+
 **Login flow → Steps (JSON)**
 
 This is the sequence a headless browser runs on every check. Steps execute in order; the check stops and is marked failed at the first step that fails.
@@ -73,7 +79,9 @@ Every step has a default 15s timeout, overridable per-step via `timeout_ms`.
 ]
 ```
 
-Independently of the steps above, the checker watches every network response the whole time the flow runs. Any response whose URL matches one of these glob patterns *and* returns a 4xx/5xx status fails the check — even if every step above passed and the page looked fine. This is what catches the "app loads, but its data calls 500" failure mode. Leave the list empty to watch every request on the page.
+Independently of the steps above, the checker watches network responses the whole time the flow runs. Any response whose URL matches one of these glob patterns *and* returns a 4xx/5xx status fails the check — even if every step above passed and the page looked fine. This is what catches the "app loads, but its data calls 500" failure mode.
+
+**This list is opt-in, not opt-out: leave it empty and nothing is watched.** Real pages carry third-party noise — analytics beacons, CSP reports, optional widget scripts — that routinely 4xx/5xx for reasons that have nothing to do with whether the app actually works for a user. Watching everything by default means the check fails on that noise instead of on real problems, which is worse than watching nothing: a monitoring tool that cries wolf gets ignored. Scope patterns to the calls that actually matter, e.g. `*/api/*` for your own backend, not a blanket wildcard.
 
 Click **Save flow**.
 
@@ -99,9 +107,9 @@ Alert behavior is fixed and intentionally simple:
 
 ## 5. Run it and read the results
 
-Click **Run now** on the site page rather than waiting for the schedule, to confirm the flow actually works.
+Click **Run now** on the site page rather than waiting for the schedule, to confirm the flow actually works. It doesn't block — the button and top of the page immediately show "Running…" and stay that way until the check resolves, so you always know whether one's in progress even if you navigate away and come back or refresh the page; this reflects real state from the server, not something the browser tab is tracking locally.
 
-**Run history** shows each attempt. A failed run looks like:
+**Run history** shows each attempt, including one currently in progress (an amber pulsing dot and "Running…" until it resolves). A failed run looks like:
 
 ```
 ● Aug 7, 10:14 AM   Step 1 (click) failed: Page.click: Timeout 15000ms exceeded.   29.9s
@@ -128,6 +136,21 @@ If a *watched* AJAX call is what failed the run (rather than a step), you'll see
 
 Login pages change. If a run starts failing because a selector no longer matches (rather than the site actually being down), update the **Steps (JSON)** on the site page and save — the next scheduled run (or another **Run now**) picks it up immediately, no restart needed.
 
+## Downloading a report
+
+**Run history → Download report** exports an Excel file for that site:
+
+- **Check Runs** — every check ever run, one row each, with timestamp, account, status, duration, and the error if it failed.
+- **Status Changes** — the same data collapsed into up/down *periods* instead of individual runs, so you can read it as a timeline: "up from 9:00 to 11:00, down from 11:00 to 12:05, up again from 12:05 onward" — this is usually the sheet you want for "when was it actually down and for how long."
+
+Runs still in progress are left out of the report entirely (they're not resolved yet); everything else is included, with no date filtering in this version — it's the site's full history.
+
 ## Dashboard
 
 The **Dashboard** (top nav) shows every monitored site at a glance: a live pulse-line visual (steady beat = healthy, flatline = down), the current status, account count, and time since last check — the place to check first before drilling into any one site's history.
+
+## Browser notifications
+
+**Enable notifications** (top-right of the header) turns on desktop notifications for failures, in addition to Slack/email alerts — useful for keeping a tab open in the background and getting an OS-level popup the moment something breaks. Your browser will prompt for permission the first time; if you dismiss or block it, the button shows "Notifications blocked" and you'll need to re-allow it from your browser's site settings.
+
+This only fires for *new* failures from the moment you enable it — it won't immediately notify about a site that was already down before you turned it on, and won't repeat for a failure you've already been notified about, but it will fire again on each subsequent failed run (matching how Slack/email alerts behave). Clicking a notification jumps straight to that site's page.

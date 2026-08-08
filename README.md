@@ -101,10 +101,17 @@ For a full worked example — a real SSO login flow, an annotated flow JSON, rea
 |---|---|---|
 | `DATABASE_URL` | SQLite connection string | `sqlite:///./data/issitelive.db` |
 | `ENCRYPTION_KEY` | Fernet key encrypting stored account passwords — **required**, no default | — |
-| `SCREENSHOTS_DIR` | Where failure screenshots are written (served at `/screenshots`) | `./data/screenshots` |
+| `SCREENSHOTS_DIR` | Where per-step screenshots are written (served at `/screenshots`) | `./data/screenshots` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | Outgoing mail server used by email alert channels | `localhost:1025`, no auth |
 | `DEFAULT_CHECK_CONCURRENCY` | Max checks run in parallel per scheduler tick | `3` |
-| `DEFAULT_STEP_TIMEOUT_MS` | Per-step timeout in a flow (can be overridden per step) | `15000` |
+| `DEFAULT_STEP_TIMEOUT_MS` | Per-step timeout in a flow (can be overridden per step) | `300000` |
+| `SCREENSHOT_RETENTION_DAYS` | How long screenshot *files* are kept before being deleted (run history/status is kept regardless) | `180` (6 months) |
+
+Every check now captures a screenshot after each step (not just on failure), so screenshots are pruned automatically once a day — anything older than `SCREENSHOT_RETENTION_DAYS` gets its image file deleted (the run's pass/fail history stays). To trigger a sweep on demand instead of waiting for the daily cycle, or to run it with a different cutoff just once:
+```
+curl -X POST "http://localhost:8000/api/screenshots/cleanup"        # uses SCREENSHOT_RETENTION_DAYS
+curl -X POST "http://localhost:8000/api/screenshots/cleanup?days=30" # one-off override
+```
 
 ## Tests
 
@@ -121,9 +128,11 @@ Covers the flow step executor and the alert dispatcher's state machine (fail-eve
 backend/
   app/
     checker/     # Playwright step runner + AJAX response watcher
+    recorder/    # Live flow recorder: CDP screencast + click/type capture -> flow JSON
     alerts/      # Slack/email senders + fail/recovery dispatch logic
     routers/     # FastAPI endpoints (sites, accounts, flows, alert channels, runs)
     scheduler.py # APScheduler jobs, one per active site, rescheduled live on edits
+    reports.py   # Excel (.xlsx) export: raw run log + collapsed up/down timeline
     models.py    # SQLAlchemy schema
   tests/
 frontend/

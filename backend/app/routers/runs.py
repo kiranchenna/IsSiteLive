@@ -1,7 +1,9 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app import models, schemas
+from app import models, retention, schemas
 from app.db import get_db
 
 router = APIRouter(tags=["runs"])
@@ -31,8 +33,17 @@ def get_run(run_id: int, db: Session = Depends(get_db)):
     return run
 
 
+@router.post("/api/screenshots/cleanup")
+def cleanup_screenshots(days: Optional[int] = None, db: Session = Depends(get_db)):
+    """Deletes screenshot files older than `days` (defaults to SCREENSHOT_RETENTION_DAYS
+    when not given). Runs automatically once a day; this exists to trigger it on demand."""
+    return retention.sweep_expired_screenshots(db, days)
+
+
 @router.get("/api/dashboard/status", response_model=list[schemas.SiteStatusOut])
 def dashboard_status(db: Session = Depends(get_db)):
+    from app.scheduler import get_next_run_time
+
     sites = db.query(models.Site).order_by(models.Site.name).all()
     result = []
     for site in sites:
@@ -50,6 +61,7 @@ def dashboard_status(db: Session = Depends(get_db)):
                     "label": account.label,
                     "last_status": last_run.status.value if last_run else "unknown",
                     "last_run_at": last_run.started_at.isoformat() if last_run else None,
+                    "error_summary": last_run.error_summary if last_run else None,
                 }
             )
         result.append(
@@ -57,6 +69,7 @@ def dashboard_status(db: Session = Depends(get_db)):
                 site_id=site.id,
                 site_name=site.name,
                 is_active=site.is_active,
+                next_run_at=get_next_run_time(site.id),
                 accounts=accounts_out,
             )
         )

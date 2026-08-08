@@ -168,10 +168,14 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
         </div>
       )}
 
-      <div className="checkbox-row" style={{ marginBottom: 14 }}>
-        <input type="checkbox" id="is-default" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
-        <label htmlFor="is-default">Use as default for sites without their own channels</label>
-      </div>
+      <button
+        type="button"
+        className={`toggle-btn ${isDefault ? "on" : "off"}`}
+        style={{ marginBottom: 14 }}
+        onClick={() => setIsDefault((v) => !v)}
+      >
+        Use as default for sites without their own channels
+      </button>
 
       {error && <p className="error-text">{error}</p>}
       <button className="btn btn-primary btn-sm" type="submit" disabled={busy}>

@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = False
 
     default_check_concurrency: int = 3
-    default_step_timeout_ms: int = 15000
+    default_step_timeout_ms: int = 300000
+    screenshot_retention_days: int = 180  # 6 months; per-call override supported via the cleanup endpoint
 
 
 settings = Settings()

@@ -18,6 +18,19 @@ export function timeAgo(iso: string | null): string {
   return `${day}d ago`;
 }
 
+export function timeUntil(iso: string | null): string {
+  if (!iso) return "not scheduled";
+  const diffMs = parseUtc(iso).getTime() - Date.now();
+  const sec = Math.max(0, Math.floor(diffMs / 1000));
+  if (sec < 60) return `in ${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `in ${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `in ${hr}h`;
+  const day = Math.floor(hr / 24);
+  return `in ${day}d`;
+}
+
 export function formatDuration(ms: number | null): string {
   if (ms === null) return "—";
   if (ms < 1000) return `${ms}ms`;

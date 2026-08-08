@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { API_BASE, api } from "../api/client";
-import { formatDateTime, formatDuration } from "../lib/time";
+import { Lightbox } from "../components/Lightbox";
+import { formatDateTime, formatDuration, timeUntil } from "../lib/time";
 import type { Account, AlertChannel, CheckRun, CheckRunDetail, Flow, Site } from "../types";
 
 const DEFAULT_STEPS = [
@@ -97,10 +98,15 @@ function ExistingSite({ siteId }: { siteId: number }) {
   const [allChannels, setAllChannels] = useState<AlertChannel[]>([]);
   const [siteChannelIds, setSiteChannelIds] = useState<number[]>([]);
   const [runs, setRuns] = useState<CheckRun[]>([]);
-  const [runningNow, setRunningNow] = useState(false);
+  const [triggering, setTriggering] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reloadRuns = () => api.listRuns(siteId).then(setRuns).catch(() => {});
+
+  // Persisted, not local: a run's status="running" comes back from the API regardless of who
+  // triggered it (this tab, another tab, the schedule) or whether the page was just refreshed --
+  // `triggering` only covers the gap between clicking and the first poll picking up the new row.
+  const isRunning = triggering || runs[0]?.status === "running";
 
   useEffect(() => {
     let cancelled = false;
@@ -123,10 +129,23 @@ function ExistingSite({ siteId }: { siteId: number }) {
       })
       .catch((e) => !cancelled && setError(String(e)));
 
-    const interval = setInterval(reloadRuns, 10000);
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = () => {
+      api
+        .listRuns(siteId)
+        .then((r) => {
+          if (cancelled) return;
+          setRuns(r);
+          timer = setTimeout(poll, r[0]?.status === "running" ? 2000 : 10000);
+        })
+        .catch(() => {
+          if (!cancelled) timer = setTimeout(poll, 10000);
+        });
+    };
+    timer = setTimeout(poll, 10000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId]);
@@ -135,13 +154,18 @@ function ExistingSite({ siteId }: { siteId: number }) {
   if (!site) return <p className="text-muted">Loading…</p>;
 
   const runNow = async () => {
-    setRunningNow(true);
+    setTriggering(true);
     try {
       await api.runNow(siteId);
-      setTimeout(reloadRuns, 3000);
-    } finally {
-      setRunningNow(false);
+    } catch (e) {
+      setError(String(e));
     }
+    // The check starts as a background task server-side, so the "running" row may not exist
+    // the instant this call returns -- give it a moment before handing off to the poll above.
+    setTimeout(async () => {
+      await reloadRuns();
+      setTriggering(false);
+    }, 800);
   };
 
   return (
@@ -155,9 +179,14 @@ function ExistingSite({ siteId }: { siteId: number }) {
             {site.base_url}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={runNow} disabled={runningNow}>
-          {runningNow ? "Running…" : "Run now"}
-        </button>
+        <div style={{ textAlign: "right" }}>
+          <button className="btn btn-primary" onClick={runNow} disabled={isRunning}>
+            {isRunning ? "Running…" : "Run now"}
+          </button>
+          <div className="text-faint mono" style={{ fontSize: 11, marginTop: 6 }}>
+            Next check {timeUntil(site.next_run_at)}
+          </div>
+        </div>
       </div>
       <p className="page-subtitle" />
 
@@ -166,7 +195,7 @@ function ExistingSite({ siteId }: { siteId: number }) {
         <AccountsCard siteId={siteId} accounts={accounts} onChange={setAccounts} />
         <FlowCard siteId={siteId} flow={flow} onSaved={setFlow} />
         <AlertChannelsCard siteId={siteId} allChannels={allChannels} initialSelected={siteChannelIds} />
-        <RunHistoryCard runs={runs} />
+        <RunHistoryCard runs={runs} siteId={siteId} />
       </div>
     </>
   );
@@ -174,20 +203,30 @@ function ExistingSite({ siteId }: { siteId: number }) {
 
 function SiteSettingsCard({ site, onUpdated }: { site: Site; onUpdated: (s: Site) => void }) {
   const [interval, setInterval] = useState(site.check_interval_seconds);
-  const [isActive, setIsActive] = useState(site.is_active);
-  const [saving, setSaving] = useState(false);
+  const [savingInterval, setSavingInterval] = useState(false);
+  const [togglingActive, setTogglingActive] = useState(false);
 
-  const save = async () => {
-    setSaving(true);
+  const saveInterval = async () => {
+    setSavingInterval(true);
     try {
-      const updated = await api.updateSite(site.id, { check_interval_seconds: interval, is_active: isActive });
+      const updated = await api.updateSite(site.id, { check_interval_seconds: interval });
       onUpdated(updated);
     } finally {
-      setSaving(false);
+      setSavingInterval(false);
     }
   };
 
-  const dirty = interval !== site.check_interval_seconds || isActive !== site.is_active;
+  const toggleActive = async () => {
+    setTogglingActive(true);
+    try {
+      const updated = await api.updateSite(site.id, { is_active: !site.is_active });
+      onUpdated(updated);
+    } finally {
+      setTogglingActive(false);
+    }
+  };
+
+  const intervalDirty = interval !== site.check_interval_seconds;
 
   return (
     <div className="card">
@@ -209,21 +248,19 @@ function SiteSettingsCard({ site, onUpdated }: { site: Site; onUpdated: (s: Site
           </select>
         </div>
         <div className="field">
-          <label>&nbsp;</label>
-          <div className="checkbox-row" style={{ marginTop: 8 }}>
-            <input
-              type="checkbox"
-              id="active"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-            />
-            <label htmlFor="active">Actively monitored</label>
-          </div>
+          <label>Monitoring</label>
+          <button
+            className={`toggle-btn ${site.is_active ? "on" : "off"}`}
+            onClick={toggleActive}
+            disabled={togglingActive}
+          >
+            {site.is_active ? "Actively monitored" : "Paused"}
+          </button>
         </div>
       </div>
-      {dirty && (
-        <button className="btn btn-sm" onClick={save} disabled={saving}>
-          {saving ? "Saving…" : "Save changes"}
+      {intervalDirty && (
+        <button className="btn btn-sm" onClick={saveInterval} disabled={savingInterval}>
+          {savingInterval ? "Saving…" : "Save changes"}
         </button>
       )}
     </div>
@@ -378,6 +415,9 @@ function FlowCard({ siteId, flow, onSaved }: { siteId: number; flow: Flow | null
     <div className="card">
       <div className="card-header">
         <h3>Login flow</h3>
+        <Link to={`/sites/${siteId}/record`} className="btn btn-sm">
+          Record flow
+        </Link>
       </div>
       <p className="text-muted" style={{ marginTop: -6, marginBottom: 14 }}>
         Steps run in order against a headless browser. Use <code className="mono">{"{{username}}"}</code> and{" "}
@@ -389,6 +429,11 @@ function FlowCard({ siteId, flow, onSaved }: { siteId: number; flow: Flow | null
       </div>
       <div className="field">
         <label>AJAX URL patterns to watch for 4xx/5xx responses</label>
+        <p className="text-faint" style={{ marginTop: -2, marginBottom: 8, fontSize: 11.5 }}>
+          Opt-in, not opt-out — an empty list watches nothing. Real pages carry third-party noise
+          (analytics, CSP reports) that isn't worth failing a check over; scope this to your own
+          endpoints, e.g. <code className="mono">*/api/*</code>.
+        </p>
         <textarea rows={3} value={watchText} onChange={(e) => setWatchText(e.target.value)} />
       </div>
       {error && <p className="error-text">{error}</p>}
@@ -447,20 +492,16 @@ function AlertChannelsCard({
       <div className="card-header">
         <h3>Alerts</h3>
       </div>
-      <div className="checkbox-row" style={{ marginBottom: 12 }}>
-        <input
-          type="checkbox"
-          id="use-defaults"
-          checked={useDefaults}
-          onChange={(e) => setUseDefaults(e.target.checked)}
-        />
-        <label htmlFor="use-defaults">
-          Use default channels
-          {defaults.length > 0 && (
-            <span className="text-faint"> ({defaults.map((c) => c.label).join(", ")})</span>
-          )}
-        </label>
-      </div>
+      <button
+        className={`toggle-btn ${useDefaults ? "on" : "off"}`}
+        style={{ marginBottom: 12 }}
+        onClick={() => setUseDefaults((v) => !v)}
+      >
+        Use default channels
+        {defaults.length > 0 && (
+          <span className="text-faint">({defaults.map((c) => c.label).join(", ")})</span>
+        )}
+      </button>
 
       {!useDefaults && (
         <div className="stack" style={{ gap: 8, marginBottom: 12 }}>
@@ -470,12 +511,9 @@ function AlertChannelsCard({
             </p>
           )}
           {allChannels.map((c) => (
-            <div className="checkbox-row" key={c.id}>
-              <input type="checkbox" id={`ch-${c.id}`} checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
-              <label htmlFor={`ch-${c.id}`}>
-                {c.label} <span className="chip">{c.type}</span>
-              </label>
-            </div>
+            <button key={c.id} className={`toggle-btn ${selected.has(c.id) ? "on" : "off"}`} onClick={() => toggle(c.id)}>
+              {c.label} <span className="chip">{c.type}</span>
+            </button>
           ))}
         </div>
       )}
@@ -487,11 +525,13 @@ function AlertChannelsCard({
   );
 }
 
-function RunHistoryCard({ runs }: { runs: CheckRun[] }) {
+function RunHistoryCard({ runs, siteId }: { runs: CheckRun[]; siteId: number }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<CheckRunDetail | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const toggle = async (run: CheckRun) => {
+    setLightboxIndex(null);
     if (expandedId === run.id) {
       setExpandedId(null);
       return;
@@ -502,20 +542,33 @@ function RunHistoryCard({ runs }: { runs: CheckRun[] }) {
     setDetail(d);
   };
 
+  const screenshotSteps = detail?.step_results.filter((s) => s.screenshot_path) ?? [];
+  const lightboxImages = screenshotSteps.map((s) => ({
+    src: `${API_BASE}${s.screenshot_path}`,
+    label: `Step ${s.step_index} · ${s.step_type}`,
+  }));
+
   return (
     <div className="card">
       <div className="card-header">
         <h3>Run history</h3>
+        <a href={`${API_BASE}/api/sites/${siteId}/report.xlsx`} className="btn btn-sm" download>
+          Download report
+        </a>
       </div>
       {runs.length === 0 && <p className="text-muted">No checks have run yet.</p>}
       <div>
         {runs.map((run) => (
           <div key={run.id}>
             <div className={`run-row ${expandedId === run.id ? "expanded" : ""}`} onClick={() => toggle(run)}>
-              <span className={`run-dot ${run.status === "success" ? "up" : "down"}`} />
+              <span
+                className={`run-dot ${run.status === "running" ? "checking" : run.status === "success" ? "up" : "down"}`}
+              />
               <span className="run-time">{formatDateTime(run.started_at)}</span>
-              <span className="run-summary">{run.status === "success" ? "Passed" : run.error_summary ?? "Failed"}</span>
-              <span className="run-duration">{formatDuration(run.duration_ms)}</span>
+              <span className="run-summary">
+                {run.status === "running" ? "Running…" : run.status === "success" ? "Passed" : run.error_summary ?? "Failed"}
+              </span>
+              <span className="run-duration">{run.status === "running" ? "—" : formatDuration(run.duration_ms)}</span>
             </div>
             {expandedId === run.id && (
               <div className="run-detail">
@@ -523,24 +576,27 @@ function RunHistoryCard({ runs }: { runs: CheckRun[] }) {
                   <p className="text-muted">Loading…</p>
                 ) : (
                   <>
-                    {detail.step_results.map((s) => (
-                      <div key={s.id} className={`step-line ${s.status}`}>
-                        <span className="mono">{s.step_index}</span>
-                        <span>{s.step_type}</span>
-                        {s.http_status && <span className="mono">HTTP {s.http_status}</span>}
-                        {s.message && <span className="text-muted">{s.message}</span>}
-                      </div>
-                    ))}
-                    {detail.step_results.some((s) => s.screenshot_path) && (
-                      <a
-                        className="screenshot-link"
-                        href={`${API_BASE}${detail.step_results.find((s) => s.screenshot_path)?.screenshot_path}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View screenshot
-                      </a>
-                    )}
+                    {detail.step_results.map((s) => {
+                      const screenshotIndex = screenshotSteps.findIndex((ss) => ss.id === s.id);
+                      return (
+                        <div key={s.id} className={`step-line ${s.status}`}>
+                          <span className="mono">{s.step_index}</span>
+                          <span>{s.step_type}</span>
+                          {s.http_status && <span className="mono">HTTP {s.http_status}</span>}
+                          {s.message && <span className="text-muted">{s.message}</span>}
+                          {s.screenshot_path && (
+                            <button
+                              type="button"
+                              className="step-thumb"
+                              onClick={() => setLightboxIndex(screenshotIndex)}
+                              title="View screenshot"
+                            >
+                              <img src={`${API_BASE}${s.screenshot_path}`} alt={`Screenshot after step ${s.step_index}`} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </>
                 )}
               </div>
@@ -548,6 +604,15 @@ function RunHistoryCard({ runs }: { runs: CheckRun[] }) {
           </div>
         ))}
       </div>
+
+      {lightboxIndex !== null && (
+        <Lightbox
+          images={lightboxImages}
+          index={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.checker.steps import execute_step
+from app.config import settings
 
 
 @pytest.mark.asyncio
@@ -19,7 +20,7 @@ async def test_fill_resolves_template_vars():
     step = {"type": "fill", "selector": "#username", "value": "{{username}}"}
     outcome = await execute_step(page, 0, step, {"username": "demo1", "password": "secret"})
     assert outcome.status == "success"
-    page.fill.assert_awaited_once_with("#username", "demo1", timeout=15000)
+    page.fill.assert_awaited_once_with("#username", "demo1", timeout=settings.default_step_timeout_ms)
 
 
 @pytest.mark.asyncio

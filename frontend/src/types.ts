@@ -1,4 +1,4 @@
-export type RunStatus = "success" | "fail";
+export type RunStatus = "running" | "success" | "fail";
 export type AlertChannelType = "slack" | "email" | "whatsapp";
 
 export interface Site {
@@ -8,6 +8,7 @@ export interface Site {
   is_active: boolean;
   check_interval_seconds: number;
   created_at: string;
+  next_run_at: string | null;
 }
 
 export interface Account {
@@ -70,11 +71,13 @@ export interface SiteStatusAccount {
   label: string;
   last_status: RunStatus | "unknown";
   last_run_at: string | null;
+  error_summary: string | null;
 }
 
 export interface SiteStatus {
   site_id: number;
   site_name: string;
   is_active: boolean;
+  next_run_at: string | null;
   accounts: SiteStatusAccount[];
 }

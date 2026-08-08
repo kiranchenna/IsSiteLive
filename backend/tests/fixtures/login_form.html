@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+<body>
+  <input id="username" name="username" type="text" />
+  <input id="password" name="password" type="password" />
+  <button id="submit" type="button">Log in</button>
+  <div id="dashboard" style="display: none">Welcome</div>
+  <script>
+    document.getElementById('submit').addEventListener('click', function () {
+      document.getElementById('dashboard').style.display = 'block';
+    });
+  </script>
+</body>
+</html>

@@ -1,15 +1,26 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app import models, schemas
+from app import models, reports, schemas
 from app.db import get_db
 
 router = APIRouter(prefix="/api/sites", tags=["sites"])
 
 
+def _with_next_run(site: models.Site) -> models.Site:
+    from app.scheduler import get_next_run_time
+
+    site.next_run_at = get_next_run_time(site.id)  # transient attribute, not a DB column
+    return site
+
+
 @router.get("", response_model=list[schemas.SiteOut])
 def list_sites(db: Session = Depends(get_db)):
-    return db.query(models.Site).order_by(models.Site.name).all()
+    sites = db.query(models.Site).order_by(models.Site.name).all()
+    return [_with_next_run(s) for s in sites]
 
 
 @router.post("", response_model=schemas.SiteOut, status_code=201)
@@ -22,7 +33,7 @@ def create_site(payload: schemas.SiteCreate, db: Session = Depends(get_db)):
     from app.scheduler import schedule_site
 
     schedule_site(site.id)
-    return site
+    return _with_next_run(site)
 
 
 @router.get("/{site_id}", response_model=schemas.SiteOut)
@@ -30,7 +41,7 @@ def get_site(site_id: int, db: Session = Depends(get_db)):
     site = db.get(models.Site, site_id)
     if not site:
         raise HTTPException(404, "Site not found")
-    return site
+    return _with_next_run(site)
 
 
 @router.put("/{site_id}", response_model=schemas.SiteOut)
@@ -49,7 +60,7 @@ def update_site(site_id: int, payload: schemas.SiteUpdate, db: Session = Depends
         schedule_site(site.id)
     else:
         unschedule_site(site.id)
-    return site
+    return _with_next_run(site)
 
 
 @router.delete("/{site_id}", status_code=204)
@@ -118,5 +129,23 @@ async def run_now(site_id: int, db: Session = Depends(get_db)):
 
     from app.scheduler import run_site_check
 
-    await run_site_check(site_id)
+    # Fire-and-forget: a check can legitimately take minutes (see DEFAULT_STEP_TIMEOUT_MS),
+    # so this must not block the request -- the client reads progress back from run history
+    # (status="running" until it resolves) instead of waiting on this call to return.
+    asyncio.create_task(run_site_check(site_id, force=True))
     return {"status": "triggered"}
+
+
+@router.get("/{site_id}/report.xlsx")
+def download_report(site_id: int, db: Session = Depends(get_db)):
+    site = db.get(models.Site, site_id)
+    if not site:
+        raise HTTPException(404, "Site not found")
+
+    buffer = reports.build_site_report(db, site)
+    filename = reports.report_filename(site)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

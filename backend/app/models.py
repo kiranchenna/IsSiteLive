@@ -19,6 +19,7 @@ from app.db import Base
 
 
 class RunStatus(str, enum.Enum):
+    running = "running"
     success = "success"
     fail = "fail"
 

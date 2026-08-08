@@ -221,6 +221,14 @@
     @apply text-unknown bg-unknown/15;
   }
 
+  .badge-checking {
+    @apply text-warn bg-warn/12;
+  }
+
+  .badge-checking::before {
+    @apply animate-brand-pulse;
+  }
+
   /* buttons */
   .btn {
     @apply appearance-none border border-border bg-surface-raised text-text px-3.5 py-2 rounded-md text-[13px] font-medium cursor-pointer transition-colors hover:border-accent-dim;
@@ -262,6 +270,36 @@
     @apply m-0 text-text font-normal;
   }
 
+  /* toggle buttons: replace on/off checkboxes with an explicit pressed/unpressed button */
+  .toggle-btn {
+    @apply appearance-none inline-flex items-center gap-2 px-3.5 py-2 rounded-md border text-[13px] font-medium cursor-pointer transition-colors;
+  }
+
+  .toggle-btn::before {
+    content: "";
+    @apply w-2 h-2 rounded-full shrink-0;
+  }
+
+  .toggle-btn.on {
+    @apply bg-up/12 border-up/40 text-up;
+  }
+
+  .toggle-btn.on::before {
+    @apply bg-up;
+  }
+
+  .toggle-btn.off {
+    @apply bg-surface-raised border-border text-text-muted hover:text-text hover:border-accent-dim;
+  }
+
+  .toggle-btn.off::before {
+    @apply bg-text-faint;
+  }
+
+  .toggle-btn-sm {
+    @apply px-2.5 py-[5px] text-xs;
+  }
+
   .table-scroll {
     @apply overflow-x-auto;
   }
@@ -287,6 +325,10 @@
     @apply bg-down shadow-[0_0_0_3px_rgba(240,85,90,0.15)];
   }
 
+  .run-dot.checking {
+    @apply bg-warn shadow-[0_0_0_3px_rgba(245,166,35,0.15)] animate-brand-pulse;
+  }
+
   .run-time {
     @apply font-mono text-xs text-text-muted w-[150px] shrink-0;
   }
@@ -304,7 +346,7 @@
   }
 
   .step-line {
-    @apply flex items-baseline gap-2.5 py-1.5 text-[12.5px];
+    @apply flex items-center gap-2.5 py-1.5 text-[12.5px];
   }
 
   .step-line .mono {
@@ -319,12 +361,37 @@
     @apply text-text-muted;
   }
 
-  .screenshot-link {
-    @apply inline-block mt-2.5 border border-border rounded-md overflow-hidden max-w-xs;
+  .step-thumb {
+    @apply appearance-none block w-11 h-8 p-0 rounded border border-border overflow-hidden shrink-0 ml-auto cursor-pointer hover:border-accent-dim transition-colors;
   }
 
-  .screenshot-link img {
-    @apply block w-full;
+  .step-thumb img {
+    @apply w-full h-full object-cover object-top;
+  }
+
+  /* lightbox */
+  .lightbox-backdrop {
+    @apply fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6;
+  }
+
+  .lightbox-content {
+    @apply bg-surface border border-border rounded-[10px] w-[95vw] max-w-[1600px] max-h-[92vh] flex flex-col overflow-hidden;
+  }
+
+  .lightbox-header {
+    @apply flex items-center justify-between px-4 py-3 border-b border-border-soft shrink-0;
+  }
+
+  .lightbox-image-wrap {
+    @apply flex-1 overflow-y-auto bg-black min-h-0;
+  }
+
+  .lightbox-image {
+    @apply w-full block;
+  }
+
+  .lightbox-nav {
+    @apply flex items-center justify-between gap-3 px-4 py-3 border-t border-border-soft shrink-0;
   }
 
   /* empty state */
@@ -350,6 +417,34 @@
 
   .error-text {
     @apply text-down text-[13px] mt-2;
+  }
+
+  /* recorder */
+  .recorder-shell {
+    @apply grid gap-4;
+    grid-template-columns: 1fr 320px;
+  }
+
+  .recorder-canvas-wrap {
+    @apply relative bg-black rounded-[10px] overflow-hidden border border-border-soft;
+  }
+
+  .recorder-canvas {
+    @apply block w-full h-auto cursor-crosshair select-none;
+  }
+
+  .recorder-steps-panel {
+    @apply flex flex-col gap-2 max-h-[640px] overflow-y-auto;
+  }
+
+  .recorder-step-row {
+    @apply flex items-start justify-between gap-2 px-2.5 py-2 rounded-md bg-surface-raised text-xs;
+  }
+
+  @media (max-width: 900px) {
+    .recorder-shell {
+      grid-template-columns: 1fr;
+    }
   }
 }
 

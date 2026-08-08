@@ -3,11 +3,12 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { PulseStrip } from "../components/PulseStrip";
 import { StatusBadge } from "../components/StatusBadge";
-import { timeAgo } from "../lib/time";
+import { timeAgo, timeUntil } from "../lib/time";
 import type { SiteStatus } from "../types";
 
-function siteState(site: SiteStatus): "up" | "down" | "unknown" {
+function siteState(site: SiteStatus): "up" | "down" | "checking" | "unknown" {
   if (site.accounts.length === 0) return "unknown";
+  if (site.accounts.some((a) => a.last_status === "running")) return "checking";
   if (site.accounts.some((a) => a.last_status === "fail")) return "down";
   if (site.accounts.every((a) => a.last_status === "success")) return "up";
   return "unknown";
@@ -19,16 +20,27 @@ export function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    const load = () =>
+    let timer: ReturnType<typeof setTimeout>;
+
+    const load = () => {
       api
         .dashboardStatus()
-        .then((data) => !cancelled && setSites(data))
-        .catch((e) => !cancelled && setError(String(e)));
+        .then((data) => {
+          if (cancelled) return;
+          setSites(data);
+          const anyChecking = data.some((s) => s.accounts.some((a) => a.last_status === "running"));
+          timer = setTimeout(load, anyChecking ? 3000 : 15000);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setError(String(e));
+          timer = setTimeout(load, 15000);
+        });
+    };
     load();
-    const interval = setInterval(load, 15000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timer);
     };
   }, []);
 
@@ -81,6 +93,9 @@ export function Dashboard() {
                   {site.accounts.length} account{site.accounts.length === 1 ? "" : "s"}
                 </span>
                 <span className="mono">{timeAgo(oldestRun ?? null)}</span>
+              </div>
+              <div className="text-faint mono" style={{ fontSize: 11, marginTop: 6 }}>
+                Next check {timeUntil(site.next_run_at)}
               </div>
             </Link>
           );

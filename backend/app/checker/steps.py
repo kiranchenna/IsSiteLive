@@ -39,7 +39,10 @@ async def execute_step(
 
     try:
         if step_type == "navigate":
-            await page.goto(step["url"], timeout=timeout_ms)
+            # domcontentloaded rather than the default "load": real sites keep the load event
+            # pending on slow-loading trackers/analytics long after the page is actually
+            # usable, which would otherwise time out checks on pages that are genuinely fine.
+            await page.goto(step["url"], wait_until="domcontentloaded", timeout=timeout_ms)
 
         elif step_type == "click":
             await page.click(step["selector"], timeout=timeout_ms)

@@ -1,5 +1,6 @@
-export function StatusBadge({ state }: { state: "up" | "down" | "unknown" }) {
-  const label = state === "up" ? "Up" : state === "down" ? "Down" : "No data";
-  const cls = state === "up" ? "badge-up" : state === "down" ? "badge-down" : "badge-unknown";
-  return <span className={`badge ${cls}`}>{label}</span>;
+const LABELS = { up: "Up", down: "Down", checking: "Checking", unknown: "No data" } as const;
+const CLASSES = { up: "badge-up", down: "badge-down", checking: "badge-checking", unknown: "badge-unknown" } as const;
+
+export function StatusBadge({ state }: { state: "up" | "down" | "checking" | "unknown" }) {
+  return <span className={`badge ${CLASSES[state]}`}>{LABELS[state]}</span>;
 }

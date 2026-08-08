@@ -29,6 +29,7 @@ class SiteOut(SiteBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     created_at: datetime
+    next_run_at: Optional[datetime] = None
 
 
 # ---- Flow ----
@@ -128,4 +129,5 @@ class SiteStatusOut(BaseModel):
     site_id: int
     site_name: str
     is_active: bool
+    next_run_at: Optional[datetime] = None
     accounts: list[dict[str, Any]]  # [{account_id, label, last_status, last_run_at}]

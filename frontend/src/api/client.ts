@@ -64,6 +64,18 @@ export const api = {
   listRuns: (siteId: number, limit = 50) => request<CheckRun[]>(`/api/sites/${siteId}/runs?limit=${limit}`),
   getRun: (id: number) => request<CheckRunDetail>(`/api/runs/${id}`),
   dashboardStatus: () => request<SiteStatus[]>("/api/dashboard/status"),
+
+  // flow recording
+  startRecording: (siteId: number, accountId: number) =>
+    request<{ session_id: string }>(`/api/sites/${siteId}/recordings`, {
+      method: "POST",
+      body: JSON.stringify({ account_id: accountId }),
+    }),
+  getRecordingSteps: (sessionId: string) =>
+    request<{ steps: Record<string, unknown>[] }>(`/api/recordings/${sessionId}/steps`),
+  stopRecording: (sessionId: string) =>
+    request<void>(`/api/recordings/${sessionId}`, { method: "DELETE" }),
 };
 
 export { BASE as API_BASE };
+export const WS_BASE = BASE.replace(/^http/, "ws");
