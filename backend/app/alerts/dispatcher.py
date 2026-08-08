@@ -5,11 +5,13 @@ from sqlalchemy.orm import Session
 from app import models
 from app.alerts import email as email_sender
 from app.alerts import slack as slack_sender
+from app.alerts import whatsapp as whatsapp_sender
 from app.alerts.base import AlertMessage
 
 SENDERS = {
     models.AlertChannelType.slack: slack_sender.send,
     models.AlertChannelType.email: email_sender.send,
+    models.AlertChannelType.whatsapp: whatsapp_sender.send,
 }
 
 
@@ -58,7 +60,7 @@ def dispatch_alert_for_run(db: Session, check_run: models.CheckRun) -> None:
     for channel in _resolve_channels(db, site):
         sender = SENDERS.get(channel.type)
         if sender is None:
-            continue  # e.g. whatsapp: reserved, not implemented yet
+            continue  # a channel type with no registered sender
         try:
             sender(channel.config_json, message)
         except Exception:  # noqa: BLE001 - one broken channel must not block others or crash the check run

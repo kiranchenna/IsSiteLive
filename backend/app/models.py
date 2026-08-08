@@ -27,7 +27,7 @@ class RunStatus(str, enum.Enum):
 class AlertChannelType(str, enum.Enum):
     slack = "slack"
     email = "email"
-    whatsapp = "whatsapp"  # reserved, not implemented yet
+    whatsapp = "whatsapp"
 
 
 class Site(Base):

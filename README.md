@@ -103,6 +103,7 @@ For a full worked example — a real SSO login flow, an annotated flow JSON, rea
 | `ENCRYPTION_KEY` | Fernet key encrypting stored account passwords — **required**, no default | — |
 | `SCREENSHOTS_DIR` | Where per-step screenshots are written (served at `/screenshots`) | `./data/screenshots` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` / `SMTP_FROM` / `SMTP_USE_TLS` | Outgoing mail server used by email alert channels | `localhost:1025`, no auth |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_WHATSAPP_FROM` | Twilio account used by WhatsApp alert channels — one account per deployment, recipients are set per channel | empty (WhatsApp channels no-op until set) |
 | `DEFAULT_CHECK_CONCURRENCY` | Max checks run in parallel per scheduler tick | `3` |
 | `DEFAULT_STEP_TIMEOUT_MS` | Per-step timeout in a flow (can be overridden per step) | `300000` |
 | `SCREENSHOT_RETENTION_DAYS` | How long screenshot *files* are kept before being deleted (run history/status is kept regardless) | `180` (6 months) |

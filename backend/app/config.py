@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     smtp_from: str = "alerts@issitelive.local"
     smtp_use_tls: bool = False
 
+    # One Twilio account per deployment, matching the SMTP pattern above -- per-channel
+    # config only holds recipients (+ optionally a content_sid), not account credentials.
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_whatsapp_from: str = ""  # e.g. "+14155238886" (the Twilio Sandbox number) or your approved sender
+
     default_check_concurrency: int = 3
     default_step_timeout_ms: int = 300000
     screenshot_retention_days: int = 180  # 6 months; per-call override supported via the cleanup endpoint

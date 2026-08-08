@@ -32,7 +32,7 @@ export function AlertChannelsPage() {
         </button>
       </div>
       <p className="page-subtitle">
-        Channels marked "default" notify any site that hasn't picked its own channels. WhatsApp support is coming later.
+        Channels marked "default" notify any site that hasn't picked its own channels.
       </p>
 
       {error && <p className="error-text">{error}</p>}
@@ -51,7 +51,7 @@ export function AlertChannelsPage() {
       ) : channels.length === 0 ? (
         <div className="empty-state">
           <h3>No alert channels yet</h3>
-          <p>Add a Slack webhook or email recipients so failures actually reach someone.</p>
+          <p>Add a Slack webhook, email recipients, or a WhatsApp number so failures actually reach someone.</p>
         </div>
       ) : (
         <div className="card">
@@ -97,7 +97,11 @@ export function AlertChannelsPage() {
 
 function destinationSummary(c: AlertChannel): string {
   if (c.type === "slack") return String(c.config_json.webhook_url ?? "");
-  if (c.type === "email") return (c.config_json.recipients as string[] | undefined)?.join(", ") ?? "";
+  if (c.type === "email" || c.type === "whatsapp") {
+    const recipients = (c.config_json.recipients as string[] | undefined)?.join(", ") ?? "";
+    const contentSid = c.type === "whatsapp" ? (c.config_json.content_sid as string | undefined) : undefined;
+    return contentSid ? `${recipients} (template)` : recipients;
+  }
   return "";
 }
 
@@ -106,6 +110,7 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
   const [label, setLabel] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [recipients, setRecipients] = useState("");
+  const [contentSid, setContentSid] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,10 +120,13 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
     setBusy(true);
     setError(null);
     try {
+      const recipientList = recipients.split(",").map((r) => r.trim()).filter(Boolean);
       const config_json =
         type === "slack"
           ? { webhook_url: webhookUrl }
-          : { recipients: recipients.split(",").map((r) => r.trim()).filter(Boolean) };
+          : type === "whatsapp"
+            ? { recipients: recipientList, ...(contentSid.trim() ? { content_sid: contentSid.trim() } : {}) }
+            : { recipients: recipientList };
       await api.createAlertChannel({ type, label, config_json, is_default: isDefault });
       onCreated();
     } catch (err) {
@@ -136,6 +144,7 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
           <select value={type} onChange={(e) => setType(e.target.value as AlertChannelType)}>
             <option value="slack">Slack</option>
             <option value="email">Email</option>
+            <option value="whatsapp">WhatsApp</option>
           </select>
         </div>
         <div className="field">
@@ -144,7 +153,7 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
         </div>
       </div>
 
-      {type === "slack" ? (
+      {type === "slack" && (
         <div className="field">
           <label>Slack webhook URL</label>
           <input
@@ -155,7 +164,9 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
             required
           />
         </div>
-      ) : (
+      )}
+
+      {type === "email" && (
         <div className="field">
           <label>Recipient emails (comma-separated)</label>
           <input
@@ -166,6 +177,37 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
             required
           />
         </div>
+      )}
+
+      {type === "whatsapp" && (
+        <>
+          <div className="field">
+            <label>Recipient WhatsApp numbers (comma-separated, E.164 format)</label>
+            <input
+              type="text"
+              value={recipients}
+              onChange={(e) => setRecipients(e.target.value)}
+              placeholder="+919876543210, +14155550123"
+              required
+            />
+          </div>
+          <div className="field">
+            <label>Content SID (optional)</label>
+            <p className="text-faint" style={{ marginTop: -2, marginBottom: 8, fontSize: 11.5 }}>
+              WhatsApp requires either the Twilio Sandbox (leave this blank — recipients must have joined the
+              sandbox) or an approved message template referenced by its Content SID for real proactive alerts in
+              production. Requires <code className="mono">TWILIO_ACCOUNT_SID</code>,{" "}
+              <code className="mono">TWILIO_AUTH_TOKEN</code>, and <code className="mono">TWILIO_WHATSAPP_FROM</code>{" "}
+              configured on the server.
+            </p>
+            <input
+              type="text"
+              value={contentSid}
+              onChange={(e) => setContentSid(e.target.value)}
+              placeholder="HXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            />
+          </div>
+        </>
       )}
 
       <button

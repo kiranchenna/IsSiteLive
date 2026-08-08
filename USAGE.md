@@ -100,6 +100,10 @@ Add a Slack webhook, mark it **default**:
 
 Back on the TinyMedic site page, under **Alerts**, "Use default channels" is checked by default — meaning it'll notify `team-slack` without any extra setup. Uncheck it if this particular site should go to different channels instead (e.g. an `oncall-email` channel for a more critical property), or add site-specific channels alongside the defaults.
 
+**WhatsApp** works the same way as Slack/email but needs a Twilio account configured on the server first (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` in `backend/.env`) — a channel without that configured will just silently do nothing. When adding a WhatsApp channel, you have two options:
+- **Leave Content SID blank** to use the Twilio Sandbox — fastest way to test, but each recipient number has to join the sandbox first (message the sandbox's join code from WhatsApp), and it's not meant for real production alerting.
+- **Set a Content SID** to use an approved WhatsApp message Template — required for real proactive alerts in production, since WhatsApp doesn't allow free-text business-initiated messages outside an active chat window. You'll need to create and get the template approved in the Twilio console first; the alert text is passed as the template's first variable.
+
 Alert behavior is fixed and intentionally simple:
 - **Every failed run sends an alert** — no deduplication, so a flapping check pages every time
 - **One recovery alert** fires on the transition from failing back to passing
