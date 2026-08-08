@@ -97,9 +97,14 @@ export function AlertChannelsPage() {
 
 function destinationSummary(c: AlertChannel): string {
   if (c.type === "slack") return String(c.config_json.webhook_url ?? "");
-  if (c.type === "email" || c.type === "whatsapp") {
+  if (c.type === "email") {
     const recipients = (c.config_json.recipients as string[] | undefined)?.join(", ") ?? "";
-    const contentSid = c.type === "whatsapp" ? (c.config_json.content_sid as string | undefined) : undefined;
+    const hasCustomSmtp = Boolean(c.config_json.smtp_host || c.config_json.smtp_password_set);
+    return hasCustomSmtp ? `${recipients} (own mail server)` : recipients;
+  }
+  if (c.type === "whatsapp") {
+    const recipients = (c.config_json.recipients as string[] | undefined)?.join(", ") ?? "";
+    const contentSid = c.config_json.content_sid as string | undefined;
     return contentSid ? `${recipients} (template)` : recipients;
   }
   return "";
@@ -115,6 +120,14 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [useCustomSmtp, setUseCustomSmtp] = useState(false);
+  const [smtpHost, setSmtpHost] = useState("");
+  const [smtpPort, setSmtpPort] = useState("");
+  const [smtpUsername, setSmtpUsername] = useState("");
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [smtpFrom, setSmtpFrom] = useState("");
+  const [smtpUseTls, setSmtpUseTls] = useState(true);
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -126,7 +139,19 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
           ? { webhook_url: webhookUrl }
           : type === "whatsapp"
             ? { recipients: recipientList, ...(contentSid.trim() ? { content_sid: contentSid.trim() } : {}) }
-            : { recipients: recipientList };
+            : {
+                recipients: recipientList,
+                ...(useCustomSmtp
+                  ? {
+                      ...(smtpHost.trim() ? { smtp_host: smtpHost.trim() } : {}),
+                      ...(smtpPort.trim() ? { smtp_port: Number(smtpPort) } : {}),
+                      ...(smtpUsername.trim() ? { smtp_username: smtpUsername.trim() } : {}),
+                      ...(smtpPassword ? { smtp_password: smtpPassword } : {}),
+                      ...(smtpFrom.trim() ? { smtp_from: smtpFrom.trim() } : {}),
+                      smtp_use_tls: smtpUseTls,
+                    }
+                  : {}),
+              };
       await api.createAlertChannel({ type, label, config_json, is_default: isDefault });
       onCreated();
     } catch (err) {
@@ -167,16 +192,100 @@ function NewChannelForm({ onCreated }: { onCreated: () => void }) {
       )}
 
       {type === "email" && (
-        <div className="field">
-          <label>Recipient emails (comma-separated)</label>
-          <input
-            type="text"
-            value={recipients}
-            onChange={(e) => setRecipients(e.target.value)}
-            placeholder="ops@example.com, oncall@example.com"
-            required
-          />
-        </div>
+        <>
+          <div className="field">
+            <label>Recipient emails (comma-separated)</label>
+            <input
+              type="text"
+              value={recipients}
+              onChange={(e) => setRecipients(e.target.value)}
+              placeholder="ops@example.com, oncall@example.com"
+              required
+            />
+          </div>
+
+          <button
+            type="button"
+            className={`toggle-btn ${useCustomSmtp ? "on" : "off"}`}
+            style={{ marginBottom: 14 }}
+            onClick={() => setUseCustomSmtp((v) => !v)}
+          >
+            Use my own mail server
+          </button>
+
+          {useCustomSmtp && (
+            <div className="card" style={{ marginBottom: 14 }}>
+              <p className="text-faint" style={{ marginTop: 0, marginBottom: 12, fontSize: 11.5 }}>
+                Optional — leave any field blank to keep using the server's shared mail settings for just that
+                field. Fill these in to send from your own email account instead (e.g. a Gmail address with an{" "}
+                <a
+                  href="https://support.google.com/mail/answer/185833"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: "var(--color-accent)" }}
+                >
+                  app password
+                </a>
+                , or a service like SendGrid/Mailgun's SMTP relay). No server access needed.
+              </p>
+              <div className="field-row">
+                <div className="field">
+                  <label>SMTP host</label>
+                  <input
+                    type="text"
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    placeholder="smtp.gmail.com"
+                  />
+                </div>
+                <div className="field">
+                  <label>Port</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(e.target.value)}
+                    placeholder="587"
+                  />
+                </div>
+              </div>
+              <div className="field">
+                <label>Username</label>
+                <input
+                  type="text"
+                  value={smtpUsername}
+                  onChange={(e) => setSmtpUsername(e.target.value)}
+                  placeholder="you@gmail.com"
+                />
+              </div>
+              <div className="field">
+                <label>Password</label>
+                <input
+                  type="password"
+                  value={smtpPassword}
+                  onChange={(e) => setSmtpPassword(e.target.value)}
+                  placeholder="app password, not your regular login password"
+                />
+              </div>
+              <div className="field">
+                <label>From address</label>
+                <input
+                  type="text"
+                  value={smtpFrom}
+                  onChange={(e) => setSmtpFrom(e.target.value)}
+                  placeholder="you@gmail.com"
+                />
+              </div>
+              <button
+                type="button"
+                className={`toggle-btn toggle-btn-sm ${smtpUseTls ? "on" : "off"}`}
+                onClick={() => setSmtpUseTls((v) => !v)}
+              >
+                Use TLS (almost always yes)
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {type === "whatsapp" && (

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { disableNotifications, enableNotifications, getPermission, isEnabled } from "../lib/notifications";
+import { disableNotifications, enableNotifications, getPermission, isEnabled, primeAlertSound } from "../lib/notifications";
 
 export function NotificationToggle() {
   const [permission, setPermission] = useState(getPermission());
@@ -21,6 +21,7 @@ export function NotificationToggle() {
       setEnabled(false);
       return;
     }
+    primeAlertSound(); // must happen synchronously within this real click, before the await below
     const result = await enableNotifications();
     setPermission(result);
     setEnabled(result === "granted");

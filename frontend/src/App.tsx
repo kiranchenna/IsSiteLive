@@ -1,6 +1,10 @@
+import { useEffect } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
+import { AlarmToggle } from "./components/AlarmToggle";
+import { AlertBanner } from "./components/AlertBanner";
 import { NotificationToggle } from "./components/NotificationToggle";
 import { useFailureNotifications } from "./hooks/useFailureNotifications";
+import { armAudioUnlock } from "./lib/notifications";
 import { Dashboard } from "./pages/Dashboard";
 import { SiteDetail } from "./pages/SiteDetail";
 import { Recorder } from "./pages/Recorder";
@@ -9,9 +13,13 @@ import { AlertChannelsPage } from "./pages/admin/AlertChannels";
 
 export default function App() {
   useFailureNotifications();
+  useEffect(() => {
+    armAudioUnlock();
+  }, []);
 
   return (
     <div className="app-shell">
+      <AlertBanner />
       <header className="app-header">
         <NavLink to="/" className="brand">
           <span className="brand-dot" />
@@ -28,7 +36,8 @@ export default function App() {
             Alert channels
           </NavLink>
         </nav>
-        <div style={{ marginLeft: "auto" }}>
+        <div style={{ marginLeft: "auto" }} className="flex items-center gap-2">
+          <AlarmToggle />
           <NotificationToggle />
         </div>
       </header>

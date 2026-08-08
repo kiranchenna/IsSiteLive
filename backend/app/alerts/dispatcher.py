@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -7,6 +8,8 @@ from app.alerts import email as email_sender
 from app.alerts import slack as slack_sender
 from app.alerts import whatsapp as whatsapp_sender
 from app.alerts.base import AlertMessage
+
+logger = logging.getLogger("issitelive.alerts")
 
 SENDERS = {
     models.AlertChannelType.slack: slack_sender.send,
@@ -64,4 +67,5 @@ def dispatch_alert_for_run(db: Session, check_run: models.CheckRun) -> None:
         try:
             sender(channel.config_json, message)
         except Exception:  # noqa: BLE001 - one broken channel must not block others or crash the check run
+            logger.exception("Alert delivery failed for channel %s (%s, id=%s)", channel.label, channel.type.value, channel.id)
             continue
