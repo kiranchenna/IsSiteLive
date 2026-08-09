@@ -7,7 +7,15 @@ Each step is a dict from Flow.steps_json, e.g.:
   {"type": "wait_for_selector", "selector": "#dashboard", "timeout_ms": 15000}
   {"type": "wait_for_url", "pattern": "**/app/**", "timeout_ms": 15000}
   {"type": "assert_selector_absent", "selector": ".error-banner"}
+  {"type": "assert_text_contains", "selector": "#latest-entry", "value": "Order {{unique}}"}
   {"type": "wait_for_load_state", "state": "networkidle", "timeout_ms": 15000}
+
+`{{unique}}` is a built-in template var (alongside `{{username}}`/`{{password}}`) that the
+runner generates fresh once per run -- fill a form field with a value containing it, then
+assert_text_contains for that same value on whatever page displays what got saved. This is
+what makes a "did my form submission actually save?" flow meaningful on a repeating schedule:
+without a unique value each run, the assertion could pass by matching a leftover from a
+previous run even if this run's submission silently failed.
 """
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -70,6 +78,16 @@ async def execute_step(
                     visible_count += 1
             if visible_count > 0:
                 return StepOutcome(step_index, step_type, "fail", f"Found {visible_count} visible match(es) for {selector!r}")
+
+        elif step_type == "assert_text_contains":
+            selector = step["selector"]
+            expected = _resolve_template(step["value"], template_vars)
+            await page.wait_for_selector(selector, timeout=timeout_ms)
+            actual = await page.locator(selector).first.text_content() or ""
+            if expected not in actual:
+                return StepOutcome(
+                    step_index, step_type, "fail", f"Expected {selector!r} to contain {expected!r}, but got {actual!r}"
+                )
 
         else:
             return StepOutcome(step_index, step_type or "unknown", "fail", f"Unknown step type: {step_type!r}")

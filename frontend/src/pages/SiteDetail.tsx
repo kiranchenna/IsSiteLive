@@ -414,7 +414,7 @@ function FlowCard({ siteId, flow, onSaved }: { siteId: number; flow: Flow | null
   return (
     <div className="card">
       <div className="card-header">
-        <h3>Login flow</h3>
+        <h3>Testing flow</h3>
         <Link to={`/sites/${siteId}/record`} className="btn btn-sm">
           Record flow
         </Link>

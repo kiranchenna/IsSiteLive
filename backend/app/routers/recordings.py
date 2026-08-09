@@ -88,6 +88,8 @@ async def recording_stream(websocket: WebSocket, session_id: str):
                 await session.dispatch_key(message["key"], message["kind"])
             elif kind == "mark_success":
                 session.mark_next_click_as_success()
+            elif kind == "mark_assertion":
+                session.mark_next_click_as_assertion(message.get("value", ""))
             elif kind == "stop":
                 await manager.remove_session(session_id)
                 break

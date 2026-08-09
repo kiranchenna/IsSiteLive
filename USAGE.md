@@ -30,15 +30,17 @@ Real checks need a real login, so add a low-privilege account dedicated to monit
 
 You can add more than one account per site (e.g. `demo-admin` alongside `demo-readonly`) if different roles exercise different parts of the app — each gets checked independently, with its own pass/fail history.
 
-## 3. Define the login flow
+## 3. Define the testing flow
 
-You don't have to write this by hand. **Login flow → Record flow** opens a live view of a real browser — click and type through the actual login exactly as a user would, and each click and typed field is turned into a step automatically, with the typed username/password swapped for `{{username}}`/`{{password}}` placeholders. When you reach the page that proves you're logged in, click **Mark success element** and then click that element (e.g. a dashboard heading or your name in a nav bar) — that becomes the check's success condition. **Save as flow** writes the result into the JSON editor below, where you can still fine-tune it by hand.
+You don't have to write this by hand. **Testing flow → Record flow** opens a live view of a real browser — click and type through the actual login exactly as a user would, and each click and typed field is turned into a step automatically, with the typed username/password swapped for `{{username}}`/`{{password}}` placeholders. When you reach the page that proves you're logged in, click **Mark success element** and then click that element (e.g. a dashboard heading or your name in a nav bar) — that becomes the check's success condition. **Save as flow** writes the result into the JSON editor below, where you can still fine-tune it by hand.
 
-The recorder handles navigation, clicks, typed fields, and the success check. It can't record "this error message should *not* be showing" (there's nothing to click on an absent element) or which AJAX calls to watch — add those two by hand afterward, covered next.
+This isn't limited to logging in — the same recorder works for any click-through flow, including submitting a form and checking it actually saved. Type the value you expect to see into **Verify a value was saved**, click **Mark element**, then click wherever that value shows up (a confirmation banner, a list, a detail page) — this records an `assert_text_contains` step. Use `{{unique}}` in that value (and in the field you filled in) so every scheduled run checks its own submission rather than a leftover from a previous one; see the step type table below.
+
+The recorder handles navigation, clicks, typed fields, the success check, and this kind of value-was-saved check. It can't record "this error message should *not* be showing" (there's nothing to click on an absent element) or which AJAX calls to watch — add those two by hand afterward, covered next.
 
 If you'd rather write it directly, or want to see what the recorder produced:
 
-**Login flow → Steps (JSON)**
+**Testing flow → Steps (JSON)**
 
 This is the sequence a headless browser runs on every check. Steps execute in order; the check stops and is marked failed at the first step that fails.
 
@@ -65,9 +67,23 @@ What each step type does:
 | `wait_for_selector` | Waits (up to `timeout_ms`) for an element to appear — this is how you confirm the post-login app actually loaded, not just that the login form submitted |
 | `wait_for_url` | Waits for the URL to match a pattern, useful after an SSO redirect |
 | `assert_selector_absent` | Fails the check if a matching element is visible — this is what catches "page loaded fine but shows an error message" |
+| `assert_text_contains` | Waits for an element, then fails the check if its text doesn't contain the given value — pair with `fill` + `{{unique}}` (below) to verify a form submission actually saved, not just that the page didn't error |
 | `wait_for_load_state` | Waits for the page to go network-idle (or another load state) |
 
 Every step has a default 15s timeout, overridable per-step via `timeout_ms`.
+
+**Beyond login — verifying a form actually saved.** The same step types work for any click-through flow, not just logging in. A common one: fill out a form, submit it, then navigate to wherever the saved value shows up (a list, a confirmation page, a detail view) and assert it's there. Since this runs on a schedule forever, use `{{unique}}` — a value the runner generates fresh every run, alongside `{{username}}`/`{{password}}` — in both the `fill` and the `assert_text_contains` so each run proves *its own* submission round-tripped, not that some earlier run's leftover value is still on screen:
+
+```json
+[
+  { "type": "navigate", "url": "https://tinymedic.com/notes/new" },
+  { "type": "fill", "selector": "#note", "value": "Monitoring check {{unique}}" },
+  { "type": "click", "selector": "#save" },
+  { "type": "assert_text_contains", "selector": "#latest-note", "value": "Monitoring check {{unique}}" }
+]
+```
+
+Since this creates a real record every time it runs, point it at a dedicated test entry (or one your app already excludes from real reports) rather than mixing synthetic data into something a real user would see.
 
 **Why that last step matters:** the AJAX watcher below only catches calls that actually fire *before the browser closes*. The dashboard element appearing doesn't mean its data calls are done — they usually fire right after. Without a trailing `wait_for_load_state` (or another wait), the check can end before those calls complete and silently miss a 500. Always give the flow a moment to let background calls settle before it finishes.
 

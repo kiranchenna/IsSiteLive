@@ -24,6 +24,7 @@ class RecordingSession:
         self.on_url: Optional[Callable[[str], None]] = None
 
         self._marking_success = False
+        self._marking_assertion_value: Optional[str] = None
         self._initial_navigate_recorded = False
         self._playwright = None
         self._browser = None
@@ -74,6 +75,9 @@ class RecordingSession:
     def mark_next_click_as_success(self) -> None:
         self._marking_success = True
 
+    def mark_next_click_as_assertion(self, value: str) -> None:
+        self._marking_assertion_value = value
+
     def _append_step(self, step: dict[str, Any], replace_last: bool = False) -> None:
         if replace_last and self.steps:
             self.steps[-1] = step
@@ -112,6 +116,12 @@ class RecordingSession:
         if self._marking_success:
             self._marking_success = False
             self._append_step({"type": "wait_for_selector", "selector": selector, "timeout_ms": 15000})
+            return
+
+        if self._marking_assertion_value is not None:
+            value = self._marking_assertion_value
+            self._marking_assertion_value = None
+            self._append_step({"type": "assert_text_contains", "selector": selector, "value": value})
             return
 
         if selector in ("body", "html"):

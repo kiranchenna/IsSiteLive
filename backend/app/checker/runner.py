@@ -2,6 +2,7 @@ import fnmatch
 import logging
 import os
 import time
+import uuid
 from datetime import datetime
 
 from playwright.async_api import async_playwright
@@ -57,6 +58,9 @@ async def run_check(db: Session, site: models.Site, account: models.Account, flo
         template_vars = {
             "username": account.username,
             "password": decrypt_password(account.encrypted_password),
+            # a fresh value each run, so a fill + assert_text_contains pair proves *this*
+            # run's submission round-tripped, not that a leftover from a past run still matches
+            "unique": uuid.uuid4().hex[:10],
         }
 
         os.makedirs(settings.screenshots_dir, exist_ok=True)

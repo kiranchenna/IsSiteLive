@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<body>
+  <input id="note" name="note" type="text" />
+  <button id="submit" type="button">Save</button>
+  <script>
+    document.getElementById('submit').addEventListener('click', function () {
+      var notes = JSON.parse(localStorage.getItem('notes') || '[]');
+      notes.push(document.getElementById('note').value);
+      localStorage.setItem('notes', JSON.stringify(notes));
+      window.location.href = 'form_list.html';
+    });
+  </script>
+</body>
+</html>

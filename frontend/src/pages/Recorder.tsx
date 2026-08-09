@@ -18,6 +18,8 @@ export function Recorder() {
   const [accountId, setAccountId] = useState<number | null>(null);
   const [steps, setSteps] = useState<FlowStep[]>([]);
   const [markingSuccess, setMarkingSuccess] = useState(false);
+  const [assertValue, setAssertValue] = useState("");
+  const [markingAssertion, setMarkingAssertion] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -87,6 +89,10 @@ export function Recorder() {
         } else if (msg.type === "step") {
           setSteps((prev) => (msg.replace_last && prev.length ? [...prev.slice(0, -1), msg.step] : [...prev, msg.step]));
           if (msg.step.type === "wait_for_selector") setMarkingSuccess(false);
+          if (msg.step.type === "assert_text_contains") {
+            setMarkingAssertion(false);
+            setAssertValue("");
+          }
         }
       };
     } catch (e) {
@@ -161,6 +167,13 @@ export function Recorder() {
     send({ type: "mark_success" });
   }
 
+  function markAssertion() {
+    const value = assertValue.trim();
+    if (!value) return;
+    setMarkingAssertion(true);
+    send({ type: "mark_assertion", value });
+  }
+
   function removeStep(index: number) {
     setSteps((prev) => prev.filter((_, i) => i !== index));
   }
@@ -203,7 +216,7 @@ export function Recorder() {
     <>
       <div className="row-between" style={{ marginBottom: 4 }}>
         <h1 className="page-title" style={{ marginBottom: 2 }}>
-          Record login flow
+          Record flow
         </h1>
         <button className="btn btn-ghost" onClick={cancel}>
           Cancel
@@ -212,7 +225,7 @@ export function Recorder() {
       <p className="page-subtitle">
         {status === "recording"
           ? "Click and type directly on the page below, exactly as a real user would."
-          : "Pick the account to record with, then click through the real login."}
+          : "Pick the account to record with, then click through the login, a form submission, or any other flow."}
       </p>
 
       {error && <p className="error-text">{error}</p>}
@@ -272,6 +285,11 @@ export function Recorder() {
                 Click the element that proves you're logged in
               </div>
             )}
+            {markingAssertion && (
+              <div className="chip" style={{ position: "absolute", top: 10, right: 10, pointerEvents: "none" }}>
+                Click the element that should show "{assertValue}"
+              </div>
+            )}
           </div>
 
           <div className="card recorder-steps-panel">
@@ -293,6 +311,27 @@ export function Recorder() {
               </div>
             ))}
 
+            <div className="field" style={{ marginTop: 8, marginBottom: 0 }}>
+              <label>Verify a value was saved (optional)</label>
+              <div className="field-row">
+                <input
+                  type="text"
+                  placeholder="e.g. Order {{unique}}"
+                  value={assertValue}
+                  onChange={(e) => setAssertValue(e.target.value)}
+                  disabled={status !== "recording" || markingAssertion}
+                />
+                <button
+                  className="btn btn-sm"
+                  style={{ flex: "0 0 auto" }}
+                  onClick={markAssertion}
+                  disabled={status !== "recording" || markingAssertion || !assertValue.trim()}
+                >
+                  Mark element
+                </button>
+              </div>
+            </div>
+
             <div className="stack" style={{ marginTop: 8, gap: 8 }}>
               <button className="btn btn-sm" onClick={markSuccess} disabled={status !== "recording"}>
                 Mark success element
@@ -302,8 +341,9 @@ export function Recorder() {
               </button>
             </div>
             <p className="text-faint" style={{ fontSize: 11.5, marginTop: 4 }}>
-              This covers navigation, clicks, and typed fields. Add "don't show an error" checks and AJAX
-              watch patterns by hand afterward.
+              This covers navigation, clicks, typed fields, the success check, and verifying a saved value. Use{" "}
+              <code>{"{{unique}}"}</code> in the value above so each scheduled run checks its own submission, not a
+              leftover from a past one. Add "don't show an error" checks and AJAX watch patterns by hand afterward.
             </p>
           </div>
         </div>

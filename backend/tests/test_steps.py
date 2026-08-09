@@ -47,6 +47,41 @@ async def test_assert_selector_absent_fails_when_visible():
 
 
 @pytest.mark.asyncio
+async def test_assert_text_contains_success():
+    page = AsyncMock()
+    locator = MagicMock()
+    locator.first.text_content = AsyncMock(return_value="Order abc123 confirmed")
+    page.locator = MagicMock(return_value=locator)
+
+    step = {"type": "assert_text_contains", "selector": "#latest", "value": "Order {{unique}}"}
+    outcome = await execute_step(page, 0, step, {"unique": "abc123"})
+    assert outcome.status == "success"
+    page.wait_for_selector.assert_awaited_once_with("#latest", timeout=settings.default_step_timeout_ms)
+
+
+@pytest.mark.asyncio
+async def test_assert_text_contains_fails_when_value_missing():
+    page = AsyncMock()
+    locator = MagicMock()
+    locator.first.text_content = AsyncMock(return_value="Order zzz999 confirmed")
+    page.locator = MagicMock(return_value=locator)
+
+    step = {"type": "assert_text_contains", "selector": "#latest", "value": "Order {{unique}}"}
+    outcome = await execute_step(page, 0, step, {"unique": "abc123"})
+    assert outcome.status == "fail"
+    assert "abc123" in outcome.message
+
+
+@pytest.mark.asyncio
+async def test_assert_text_contains_fails_when_selector_never_appears():
+    page = AsyncMock()
+    page.wait_for_selector.side_effect = TimeoutError("timed out")
+    step = {"type": "assert_text_contains", "selector": "#missing", "value": "x"}
+    outcome = await execute_step(page, 0, step, {})
+    assert outcome.status == "fail"
+
+
+@pytest.mark.asyncio
 async def test_unknown_step_type_fails():
     page = AsyncMock()
     outcome = await execute_step(page, 0, {"type": "not_a_real_step"}, {})

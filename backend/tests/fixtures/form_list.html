@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+<body>
+  <div id="latest"></div>
+  <script>
+    var notes = JSON.parse(localStorage.getItem('notes') || '[]');
+    document.getElementById('latest').textContent = notes.length
+      ? 'Latest: ' + notes[notes.length - 1]
+      : 'No entries yet';
+  </script>
+</body>
+</html>

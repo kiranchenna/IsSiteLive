@@ -7,6 +7,7 @@ from app.recorder.session import RecordingSession
 
 FIXTURE_PATH = "file://" + os.path.join(os.path.dirname(__file__), "fixtures", "login_form.html")
 NAV_START_PATH = "file://" + os.path.join(os.path.dirname(__file__), "fixtures", "nav_start.html")
+FORM_LIST_PATH = "file://" + os.path.join(os.path.dirname(__file__), "fixtures", "form_list.html")
 
 
 async def _click(session: RecordingSession, selector: str):
@@ -75,6 +76,46 @@ async def test_marking_success_captures_even_a_background_click():
         last = session.steps[-1]
         assert last["type"] == "wait_for_selector"
         assert last["selector"] in ("body", "html")
+    finally:
+        await session.stop()
+
+
+@pytest.mark.asyncio
+async def test_marking_assertion_captures_selector_and_given_value():
+    session = RecordingSession("test-session-assert", username="demo_user", password="demo_pass")
+    await session.start()
+    try:
+        await session._page.goto(FORM_LIST_PATH)
+        await session._page.wait_for_timeout(50)
+
+        session.mark_next_click_as_assertion("Order {{unique}}")
+        await _click(session, "#latest")
+        await session._page.wait_for_timeout(200)
+
+        last = session.steps[-1]
+        assert last == {"type": "assert_text_contains", "selector": "#latest", "value": "Order {{unique}}"}
+    finally:
+        await session.stop()
+
+
+@pytest.mark.asyncio
+async def test_assertion_marking_mode_clears_after_one_click():
+    """A second, unrelated click after the assertion has been recorded should go back to
+    being treated as a normal click step, not silently consume a stale pending value."""
+    session = RecordingSession("test-session-assert-2", username="demo_user", password="demo_pass")
+    await session.start()
+    try:
+        await session._page.goto(FORM_LIST_PATH)
+        await session._page.wait_for_timeout(50)
+
+        session.mark_next_click_as_assertion("Order {{unique}}")
+        await _click(session, "#latest")
+        await session._page.wait_for_timeout(100)
+
+        await _click(session, "#latest")
+        await session._page.wait_for_timeout(100)
+
+        assert session.steps[-1] == {"type": "click", "selector": "#latest"}
     finally:
         await session.stop()
 
