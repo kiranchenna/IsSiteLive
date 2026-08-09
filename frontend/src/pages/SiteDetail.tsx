@@ -60,7 +60,7 @@ function NewSiteForm({ onCreated }: { onCreated: (id: number) => void }) {
       <form className="card" onSubmit={submit} style={{ maxWidth: 480 }}>
         <div className="field">
           <label>Site name</label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="TinyMedic" required />
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Kiran Chenna" required />
         </div>
         <div className="field">
           <label>Base URL</label>
@@ -68,7 +68,7 @@ function NewSiteForm({ onCreated }: { onCreated: (id: number) => void }) {
             type="url"
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="https://tinymedic.com"
+            placeholder="https://kiranchenna.com"
             required
           />
         </div>

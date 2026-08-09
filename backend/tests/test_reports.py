@@ -20,7 +20,7 @@ def db_session(tmp_path):
 
 
 def _seed(db):
-    site = models.Site(name="TinyMedic Prod", base_url="https://example.com")
+    site = models.Site(name="Kiran Chenna Prod", base_url="https://example.com")
     account = models.Account(site=site, label="demo", username="u", encrypted_password=b"x")
     db.add_all([site, account])
     db.flush()
@@ -91,6 +91,6 @@ def test_status_changes_collapses_consecutive_same_status_runs(db_session):
 def test_report_filename_sanitizes_the_site_name(db_session):
     site = _seed(db_session)
     name = report_filename(site)
-    assert name.startswith("TinyMedic_Prod_report_")
+    assert name.startswith("Kiran_Chenna_Prod_report_")
     assert name.endswith(".xlsx")
     assert " " not in name

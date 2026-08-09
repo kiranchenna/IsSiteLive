@@ -5,7 +5,7 @@ from app.alerts.email import send
 from app.crypto import encrypt_password
 
 MESSAGE = AlertMessage(
-    kind="failure", site_name="TinyMedic", account_label="demo", summary="down", run_id=1, occurred_at="2026-01-01T00:00:00"
+    kind="failure", site_name="Kiran Chenna", account_label="demo", summary="down", run_id=1, occurred_at="2026-01-01T00:00:00"
 )
 
 

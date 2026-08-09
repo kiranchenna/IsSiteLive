@@ -5,7 +5,7 @@ from app.alerts.whatsapp import send
 
 MESSAGE = AlertMessage(
     kind="failure",
-    site_name="TinyMedic",
+    site_name="Kiran Chenna",
     account_label="demo",
     summary="Step 2 (click) failed: timeout",
     run_id=42,
@@ -33,7 +33,7 @@ def test_sandbox_mode_sends_freeform_body(mock_settings, mock_post):
     assert kwargs["data"]["From"] == "whatsapp:+14155238886"
     assert "Body" in kwargs["data"]
     assert "ContentSid" not in kwargs["data"]
-    assert "TinyMedic" in kwargs["data"]["Body"]
+    assert "Kiran Chenna" in kwargs["data"]["Body"]
 
 
 @patch("app.alerts.whatsapp.httpx.post")
@@ -47,7 +47,7 @@ def test_template_mode_sends_content_sid_and_variables(mock_settings, mock_post)
     _, kwargs = mock_post.call_args
     assert kwargs["data"]["ContentSid"] == "HXabc123"
     assert "Body" not in kwargs["data"]
-    assert "TinyMedic" in kwargs["data"]["ContentVariables"]
+    assert "Kiran Chenna" in kwargs["data"]["ContentVariables"]
 
 
 @patch("app.alerts.whatsapp.httpx.post")

@@ -2,7 +2,7 @@
 
 This walks through setting up monitoring for a realistic scenario: a marketing site with a "Sign In" button that hands off to an SSO login, landing in an app that loads a shell first and then fetches its real data over AJAX. A plain uptime ping would miss both ways this can break — a login page rendering with a visible error despite a 200 response, and a post-login page that loads fine but whose data calls come back 500/502/504. This is exactly the case that motivated this tool.
 
-We'll use a fictional site, `tinymedic.com`, as the example throughout.
+We'll use a fictional site, `kiranchenna.com`, as the example throughout.
 
 ## 1. Add the site
 
@@ -10,8 +10,8 @@ We'll use a fictional site, `tinymedic.com`, as the example throughout.
 
 | Field | Example value |
 |---|---|
-| Name | `TinyMedic` |
-| Base URL | `https://tinymedic.com` |
+| Name | `Kiran Chenna` |
+| Base URL | `https://kiranchenna.com` |
 | Check interval | `Every 5 min` |
 
 Click **Create site**. You land on the site's detail page — everything else happens here.
@@ -25,7 +25,7 @@ Real checks need a real login, so add a low-privilege account dedicated to monit
 | Field | Example value |
 |---|---|
 | Label | `demo-readonly` |
-| Username | `monitor@tinymedic.com` |
+| Username | `monitor@kiranchenna.com` |
 | Password | *(the account's real password)* |
 
 You can add more than one account per site (e.g. `demo-admin` alongside `demo-readonly`) if different roles exercise different parts of the app — each gets checked independently, with its own pass/fail history.
@@ -46,7 +46,7 @@ This is the sequence a headless browser runs on every check. Steps execute in or
 
 ```json
 [
-  { "type": "navigate", "url": "https://tinymedic.com" },
+  { "type": "navigate", "url": "https://kiranchenna.com" },
   { "type": "click", "selector": "#sign-in" },
   { "type": "fill", "selector": "#username", "value": "{{username}}" },
   { "type": "fill", "selector": "#password", "value": "{{password}}" },
@@ -76,7 +76,7 @@ Every step has a default 15s timeout, overridable per-step via `timeout_ms`.
 
 ```json
 [
-  { "type": "navigate", "url": "https://tinymedic.com/notes/new" },
+  { "type": "navigate", "url": "https://kiranchenna.com/notes/new" },
   { "type": "fill", "selector": "#note", "value": "Monitoring check {{unique}}" },
   { "type": "click", "selector": "#save" },
   { "type": "assert_text_contains", "selector": "#latest-note", "value": "Monitoring check {{unique}}" }
@@ -114,7 +114,7 @@ Add a Slack webhook, mark it **default**:
 | Webhook URL | `https://hooks.slack.com/services/…` |
 | Default | ✓ |
 
-Back on the TinyMedic site page, under **Alerts**, "Use default channels" is checked by default — meaning it'll notify `team-slack` without any extra setup. Uncheck it if this particular site should go to different channels instead (e.g. an `oncall-email` channel for a more critical property), or add site-specific channels alongside the defaults.
+Back on the Kiran Chenna site page, under **Alerts**, "Use default channels" is checked by default — meaning it'll notify `team-slack` without any extra setup. Uncheck it if this particular site should go to different channels instead (e.g. an `oncall-email` channel for a more critical property), or add site-specific channels alongside the defaults.
 
 **Email delivery** works out of the box using whatever mail server the deployment's admin configured in `backend/.env` — as a non-technical user, you don't need to touch that: just add your recipient addresses and you're done. If you'd rather send from your own email account instead (e.g. you want alerts to come from *your* Gmail address, not a shared one), toggle **Use my own mail server** when adding the channel and fill in your provider's SMTP details (for Gmail: `smtp.gmail.com`, port `587`, an [app password](https://support.google.com/mail/answer/185833) — not your regular password — with TLS on). You can set just one field (e.g. only a custom "from" address) and leave the rest blank to keep using the shared server for everything else. The password is encrypted before it's stored and is never shown again once saved, even to you.
 
@@ -151,7 +151,7 @@ Each step's outcome is listed, and a full-page screenshot at the moment of failu
 If a *watched* AJAX call is what failed the run (rather than a step), you'll see a `watched_response` row instead, with the offending status code and URL:
 
 ```
-2  watched_response   HTTP 500   https://tinymedic.com/api/patients
+2  watched_response   HTTP 500   https://kiranchenna.com/api/patients
 ```
 
 ## 6. Iterate on the flow
