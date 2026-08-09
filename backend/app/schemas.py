@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import AlertChannelType, RunStatus
 
@@ -11,7 +11,7 @@ class SiteBase(BaseModel):
     name: str
     base_url: str
     is_active: bool = True
-    check_interval_seconds: int = 300
+    check_interval_seconds: int = Field(default=300, gt=0)
 
 
 class SiteCreate(SiteBase):
@@ -22,7 +22,7 @@ class SiteUpdate(BaseModel):
     name: Optional[str] = None
     base_url: Optional[str] = None
     is_active: Optional[bool] = None
-    check_interval_seconds: Optional[int] = None
+    check_interval_seconds: Optional[int] = Field(default=None, gt=0)
 
 
 class SiteOut(SiteBase):

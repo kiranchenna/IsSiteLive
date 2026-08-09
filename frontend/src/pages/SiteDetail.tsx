@@ -15,13 +15,6 @@ const DEFAULT_STEPS = [
   { type: "assert_selector_absent", selector: ".error-banner" },
 ];
 
-const INTERVAL_PRESETS = [
-  { label: "5 min", value: 300 },
-  { label: "15 min", value: 900 },
-  { label: "30 min", value: 1800 },
-  { label: "1 hour", value: 3600 },
-];
-
 export function SiteDetail() {
   const params = useParams();
   const navigate = useNavigate();
@@ -36,7 +29,7 @@ export function SiteDetail() {
 function NewSiteForm({ onCreated }: { onCreated: (id: number) => void }) {
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [interval, setInterval] = useState(300);
+  const [intervalMinutes, setIntervalMinutes] = useState(5);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +38,7 @@ function NewSiteForm({ onCreated }: { onCreated: (id: number) => void }) {
     setBusy(true);
     setError(null);
     try {
-      const site = await api.createSite({ name, base_url: baseUrl, check_interval_seconds: interval });
+      const site = await api.createSite({ name, base_url: baseUrl, check_interval_seconds: intervalMinutes * 60 });
       onCreated(site.id);
     } catch (err) {
       setError(String(err));
@@ -73,14 +66,15 @@ function NewSiteForm({ onCreated }: { onCreated: (id: number) => void }) {
           />
         </div>
         <div className="field">
-          <label>Check interval</label>
-          <select value={interval} onChange={(e) => setInterval(Number(e.target.value))}>
-            {INTERVAL_PRESETS.map((p) => (
-              <option key={p.value} value={p.value}>
-                Every {p.label}
-              </option>
-            ))}
-          </select>
+          <label>Check interval (minutes)</label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={intervalMinutes}
+            onChange={(e) => setIntervalMinutes(Math.max(1, Math.round(Number(e.target.value))))}
+            required
+          />
         </div>
         {error && <p className="error-text">{error}</p>}
         <button className="btn btn-primary" type="submit" disabled={busy}>
@@ -202,14 +196,14 @@ function ExistingSite({ siteId }: { siteId: number }) {
 }
 
 function SiteSettingsCard({ site, onUpdated }: { site: Site; onUpdated: (s: Site) => void }) {
-  const [interval, setInterval] = useState(site.check_interval_seconds);
+  const [intervalMinutes, setIntervalMinutes] = useState(Math.round(site.check_interval_seconds / 60));
   const [savingInterval, setSavingInterval] = useState(false);
   const [togglingActive, setTogglingActive] = useState(false);
 
   const saveInterval = async () => {
     setSavingInterval(true);
     try {
-      const updated = await api.updateSite(site.id, { check_interval_seconds: interval });
+      const updated = await api.updateSite(site.id, { check_interval_seconds: intervalMinutes * 60 });
       onUpdated(updated);
     } finally {
       setSavingInterval(false);
@@ -226,7 +220,7 @@ function SiteSettingsCard({ site, onUpdated }: { site: Site; onUpdated: (s: Site
     }
   };
 
-  const intervalDirty = interval !== site.check_interval_seconds;
+  const intervalDirty = intervalMinutes * 60 !== site.check_interval_seconds;
 
   return (
     <div className="card">
@@ -235,17 +229,14 @@ function SiteSettingsCard({ site, onUpdated }: { site: Site; onUpdated: (s: Site
       </div>
       <div className="field-row">
         <div className="field">
-          <label>Check interval</label>
-          <select value={interval} onChange={(e) => setInterval(Number(e.target.value))}>
-            {INTERVAL_PRESETS.map((p) => (
-              <option key={p.value} value={p.value}>
-                Every {p.label}
-              </option>
-            ))}
-            {!INTERVAL_PRESETS.some((p) => p.value === interval) && (
-              <option value={interval}>Every {interval}s (custom)</option>
-            )}
-          </select>
+          <label>Check interval (minutes)</label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={intervalMinutes}
+            onChange={(e) => setIntervalMinutes(Math.max(1, Math.round(Number(e.target.value))))}
+          />
         </div>
         <div className="field">
           <label>Monitoring</label>
