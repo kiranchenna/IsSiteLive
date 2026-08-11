@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { API_BASE, api } from "../api/client";
+import { DownloadReportModal } from "../components/DownloadReportModal";
 import { Lightbox } from "../components/Lightbox";
 import { formatDateTime, formatDuration, timeUntil } from "../lib/time";
 import type { Account, AlertChannel, CheckRun, CheckRunDetail, Flow, Site } from "../types";
@@ -91,16 +92,18 @@ function ExistingSite({ siteId }: { siteId: number }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [allChannels, setAllChannels] = useState<AlertChannel[]>([]);
   const [siteChannelIds, setSiteChannelIds] = useState<number[]>([]);
-  const [runs, setRuns] = useState<CheckRun[]>([]);
+  const [latestRun, setLatestRun] = useState<CheckRun | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const reloadRuns = () => api.listRuns(siteId).then(setRuns).catch(() => {});
+  // Bumped on every poll tick so RunHistoryCard refetches whatever page it's currently on --
+  // decoupled from `latestRun` so browsing older pages of history never gets fetched as if it
+  // were the "is a check running" signal (that must always reflect the single newest run).
+  const [runsRefreshToken, setRunsRefreshToken] = useState(0);
 
   // Persisted, not local: a run's status="running" comes back from the API regardless of who
   // triggered it (this tab, another tab, the schedule) or whether the page was just refreshed --
   // `triggering` only covers the gap between clicking and the first poll picking up the new row.
-  const isRunning = triggering || runs[0]?.status === "running";
+  const isRunning = triggering || latestRun?.status === "running";
 
   useEffect(() => {
     let cancelled = false;
@@ -110,7 +113,7 @@ function ExistingSite({ siteId }: { siteId: number }) {
       api.listAccounts(siteId),
       api.listAlertChannels(),
       api.getSiteAlertChannels(siteId),
-      api.listRuns(siteId),
+      api.listRuns(siteId, 1, 0),
     ])
       .then(([s, f, accs, channels, channelIds, r]) => {
         if (cancelled) return;
@@ -119,18 +122,20 @@ function ExistingSite({ siteId }: { siteId: number }) {
         setAccounts(accs);
         setAllChannels(channels);
         setSiteChannelIds(channelIds);
-        setRuns(r);
+        setLatestRun(r.items[0] ?? null);
       })
       .catch((e) => !cancelled && setError(String(e)));
 
     let timer: ReturnType<typeof setTimeout>;
     const poll = () => {
       api
-        .listRuns(siteId)
+        .listRuns(siteId, 1, 0)
         .then((r) => {
           if (cancelled) return;
-          setRuns(r);
-          timer = setTimeout(poll, r[0]?.status === "running" ? 2000 : 10000);
+          const newest = r.items[0] ?? null;
+          setLatestRun(newest);
+          setRunsRefreshToken((t) => t + 1);
+          timer = setTimeout(poll, newest?.status === "running" ? 2000 : 10000);
         })
         .catch(() => {
           if (!cancelled) timer = setTimeout(poll, 10000);
@@ -157,7 +162,9 @@ function ExistingSite({ siteId }: { siteId: number }) {
     // The check starts as a background task server-side, so the "running" row may not exist
     // the instant this call returns -- give it a moment before handing off to the poll above.
     setTimeout(async () => {
-      await reloadRuns();
+      const r = await api.listRuns(siteId, 1, 0).catch(() => null);
+      if (r) setLatestRun(r.items[0] ?? null);
+      setRunsRefreshToken((t) => t + 1);
       setTriggering(false);
     }, 800);
   };
@@ -189,7 +196,7 @@ function ExistingSite({ siteId }: { siteId: number }) {
         <AccountsCard siteId={siteId} accounts={accounts} onChange={setAccounts} />
         <FlowCard siteId={siteId} flow={flow} onSaved={setFlow} />
         <AlertChannelsCard siteId={siteId} allChannels={allChannels} initialSelected={siteChannelIds} />
-        <RunHistoryCard runs={runs} siteId={siteId} />
+        <RunHistoryCard siteId={siteId} refreshToken={runsRefreshToken} />
       </div>
     </>
   );
@@ -516,10 +523,41 @@ function AlertChannelsCard({
   );
 }
 
-function RunHistoryCard({ runs, siteId }: { runs: CheckRun[]; siteId: number }) {
+const RUN_HISTORY_PAGE_SIZE = 50;
+
+function RunHistoryCard({ siteId, refreshToken }: { siteId: number; refreshToken: number }) {
+  const [runs, setRuns] = useState<CheckRun[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<CheckRunDetail | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+
+  // A new site should always start back at the newest page, not wherever the last one left off.
+  useEffect(() => {
+    setOffset(0);
+  }, [siteId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listRuns(siteId, RUN_HISTORY_PAGE_SIZE, offset)
+      .then((page) => {
+        if (cancelled) return;
+        setRuns(page.items);
+        setTotal(page.total);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [siteId, offset, refreshToken]);
+
+  const rangeStart = total === 0 ? 0 : offset + 1;
+  const rangeEnd = Math.min(offset + RUN_HISTORY_PAGE_SIZE, total);
+  const hasNewer = offset > 0;
+  const hasOlder = offset + RUN_HISTORY_PAGE_SIZE < total;
 
   const toggle = async (run: CheckRun) => {
     setLightboxIndex(null);
@@ -543,11 +581,11 @@ function RunHistoryCard({ runs, siteId }: { runs: CheckRun[]; siteId: number }) 
     <div className="card">
       <div className="card-header">
         <h3>Run history</h3>
-        <a href={`${API_BASE}/api/sites/${siteId}/report.xlsx`} className="btn btn-sm" download>
+        <button type="button" className="btn btn-sm" onClick={() => setShowReportModal(true)}>
           Download report
-        </a>
+        </button>
       </div>
-      {runs.length === 0 && <p className="text-muted">No checks have run yet.</p>}
+      {total === 0 && <p className="text-muted">No checks have run yet.</p>}
       <div>
         {runs.map((run) => (
           <div key={run.id}>
@@ -596,6 +634,38 @@ function RunHistoryCard({ runs, siteId }: { runs: CheckRun[]; siteId: number }) 
         ))}
       </div>
 
+      {total > 0 && (
+        <div className="row-between" style={{ marginTop: 10 }}>
+          <span className="text-faint mono" style={{ fontSize: 11.5 }}>
+            Showing {rangeStart}–{rangeEnd} of {total}
+          </span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                setExpandedId(null);
+                setOffset((o) => Math.max(0, o - RUN_HISTORY_PAGE_SIZE));
+              }}
+              disabled={!hasNewer}
+            >
+              ← Newer
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                setExpandedId(null);
+                setOffset((o) => o + RUN_HISTORY_PAGE_SIZE);
+              }}
+              disabled={!hasOlder}
+            >
+              Older →
+            </button>
+          </div>
+        </div>
+      )}
+
       {lightboxIndex !== null && (
         <Lightbox
           images={lightboxImages}
@@ -604,6 +674,8 @@ function RunHistoryCard({ runs, siteId }: { runs: CheckRun[]; siteId: number }) 
           onNavigate={setLightboxIndex}
         />
       )}
+
+      {showReportModal && <DownloadReportModal siteId={siteId} onClose={() => setShowReportModal(false)} />}
     </div>
   );
 }

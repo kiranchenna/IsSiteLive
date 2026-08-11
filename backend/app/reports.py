@@ -1,6 +1,7 @@
 import io
 from collections import defaultdict
 from datetime import datetime
+from typing import Optional
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
@@ -22,14 +23,31 @@ def _status_fill(status: models.RunStatus) -> PatternFill:
     return UP_FILL if status == models.RunStatus.success else DOWN_FILL
 
 
-def build_site_report(db: Session, site: models.Site) -> io.BytesIO:
-    """An .xlsx workbook with the raw check log and a collapsed up/down timeline per account."""
-    runs = (
-        db.query(models.CheckRun)
-        .filter(models.CheckRun.site_id == site.id, models.CheckRun.status != models.RunStatus.running)
-        .order_by(models.CheckRun.started_at.asc())
-        .all()
+def build_site_report(
+    db: Session,
+    site: models.Site,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    status_filter: Optional[models.RunStatus] = None,
+) -> io.BytesIO:
+    """An .xlsx workbook with the raw check log and a collapsed up/down timeline per account.
+
+    start_date/end_date filter on started_at (inclusive); status_filter narrows the raw
+    "Check Runs" log to just success or just fail rows. It deliberately does NOT narrow
+    "Status Changes": collapsing consecutive same-status runs into periods only makes sense
+    against the full timeline -- filtering out (say) every success run first would merge
+    surrounding fail runs into one falsely-continuous outage instead of the real up/down/up
+    pattern that actually happened.
+    """
+    query = db.query(models.CheckRun).filter(
+        models.CheckRun.site_id == site.id, models.CheckRun.status != models.RunStatus.running
     )
+    if start_date is not None:
+        query = query.filter(models.CheckRun.started_at >= start_date)
+    if end_date is not None:
+        query = query.filter(models.CheckRun.started_at <= end_date)
+    timeline_runs = query.order_by(models.CheckRun.started_at.asc()).all()
+    runs = [r for r in timeline_runs if status_filter is None or r.status == status_filter]
     accounts = {a.id: a.label for a in db.query(models.Account).filter(models.Account.site_id == site.id).all()}
 
     wb = Workbook()
@@ -62,7 +80,7 @@ def build_site_report(db: Session, site: models.Site) -> io.BytesIO:
         cell.font = HEADER_FONT
 
     by_account: dict[int, list[models.CheckRun]] = defaultdict(list)
-    for run in runs:
+    for run in timeline_runs:
         by_account[run.account_id].append(run)
 
     for account_id, account_runs in by_account.items():
@@ -95,6 +113,7 @@ def build_site_report(db: Session, site: models.Site) -> io.BytesIO:
     return buffer
 
 
-def report_filename(site: models.Site) -> str:
+def report_filename(site: models.Site, status_filter: Optional[models.RunStatus] = None) -> str:
     safe_name = "".join(c if c.isalnum() else "_" for c in site.name).strip("_") or f"site-{site.id}"
-    return f"{safe_name}_report_{datetime.utcnow().strftime('%Y%m%d')}.xlsx"
+    suffix = f"_{status_filter.value}" if status_filter is not None else ""
+    return f"{safe_name}_report{suffix}_{datetime.utcnow().strftime('%Y%m%d')}.xlsx"

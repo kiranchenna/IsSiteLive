@@ -66,6 +66,13 @@ export interface CheckRunDetail extends CheckRun {
   step_results: StepResult[];
 }
 
+export interface PaginatedRuns {
+  items: CheckRun[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface SiteStatusAccount {
   account_id: number;
   label: string;

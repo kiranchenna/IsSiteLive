@@ -125,6 +125,13 @@ class CheckRunDetailOut(CheckRunOut):
     step_results: list[StepResultOut]
 
 
+class PaginatedRunsOut(BaseModel):
+    items: list[CheckRunOut]
+    total: int
+    limit: int
+    offset: int
+
+
 class SiteStatusOut(BaseModel):
     site_id: int
     site_name: str

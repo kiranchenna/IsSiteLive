@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime, time
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -137,13 +139,35 @@ async def run_now(site_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{site_id}/report.xlsx")
-def download_report(site_id: int, db: Session = Depends(get_db)):
+def download_report(
+    site_id: int,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
     site = db.get(models.Site, site_id)
     if not site:
         raise HTTPException(404, "Site not found")
 
-    buffer = reports.build_site_report(db, site)
-    filename = reports.report_filename(site)
+    status_filter = None
+    if status is not None:
+        if status not in ("success", "fail"):
+            raise HTTPException(422, f"Invalid status filter: {status!r} (expected 'success' or 'fail')")
+        status_filter = models.RunStatus(status)
+
+    def _parse_date(value: str, param: str, end_of_day: bool) -> datetime:
+        try:
+            date_only = datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(422, f"Invalid {param}: {value!r} (expected YYYY-MM-DD)") from None
+        return datetime.combine(date_only, time.max if end_of_day else time.min)
+
+    start_dt = _parse_date(start_date, "start_date", end_of_day=False) if start_date else None
+    end_dt = _parse_date(end_date, "end_date", end_of_day=True) if end_date else None
+
+    buffer = reports.build_site_report(db, site, start_date=start_dt, end_date=end_dt, status_filter=status_filter)
+    filename = reports.report_filename(site, status_filter=status_filter)
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

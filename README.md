@@ -6,19 +6,27 @@ Stack: FastAPI + Playwright + APScheduler + SQLite on the backend, React + Vite 
 
 ## Prerequisites
 
-- **Docker Desktop** (recommended path), or
+- **Docker Desktop** (recommended path) — on Windows, use the **WSL2 backend** (Docker Desktop enables this by default on a modern install); on Linux, [Docker Engine](https://docs.docker.com/engine/install/) works just as well as Docker Desktop, or
 - **Python 3.10+** and **Node 20+** for running the two services directly
+
+Supported on macOS, Linux, and Windows. Commands below are given for **macOS/Linux** (bash/zsh) and **Windows (PowerShell)** wherever they differ — PowerShell is the default terminal in Windows Terminal and VS Code. If you're on the classic Command Prompt instead, swap `Copy-Item` for `copy` and `$env:VAR="value"; command` for `set VAR=value&& command`.
 
 ## Quick start (Docker)
 
 1. Create the backend env file and generate an encryption key (used to encrypt stored account passwords at rest):
 
-   ```
+   ```bash
+   # macOS/Linux
    cp backend/.env.example backend/.env
-   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+   python3 -c "import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+   ```
+   ```powershell
+   # Windows (PowerShell)
+   Copy-Item backend\.env.example backend\.env
+   python -c "import base64, secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
    ```
 
-   Paste the printed key into `ENCRYPTION_KEY` in `backend/.env`.
+   Paste the printed key into `ENCRYPTION_KEY` in `backend/.env`. (This uses only Python's standard library, deliberately — the Docker path shouldn't require `cryptography` to already be installed locally just to generate one key. The result is a valid Fernet key either way: that's exactly what `Fernet.generate_key()` does internally.)
 
 2. Build and start both services:
 
@@ -34,38 +42,47 @@ Stack: FastAPI + Playwright + APScheduler + SQLite on the backend, React + Vite 
    Data (SQLite file + failure screenshots) persists in a named Docker volume across restarts.
 
    To point the frontend at a non-localhost backend (e.g. deploying to a server), set `VITE_API_BASE` before building:
-   ```
+   ```bash
+   # macOS/Linux
    VITE_API_BASE=https://your-host:8000 docker compose up --build
+   ```
+   ```powershell
+   # Windows (PowerShell)
+   $env:VITE_API_BASE="https://your-host:8000"; docker compose up --build
    ```
 
 Stop everything with `docker compose down` (add `-v` only if you also want to wipe stored data).
 
 ### Using custom ports
 
-By default the backend listens on `8000` and the frontend on `5173` (both configurable):
+By default the backend listens on `8000` and the frontend on `5173` (both configurable). The simplest cross-platform way is a `.env` file in the project root (Docker Compose reads it automatically) with `BACKEND_PORT=9000` / `FRONTEND_PORT=4000` / `VITE_API_BASE=http://localhost:9000` — then just run `docker compose up --build` as usual. Or set them inline for one run:
 
-**Docker:**
-```
-BACKEND_PORT=9000 FRONTEND_PORT=4000 docker compose up --build
-```
-Since the frontend is built as static assets, it needs to know the backend's URL *at build time* — if you change `BACKEND_PORT`, pass a matching `VITE_API_BASE` too:
-```
+**Docker — macOS/Linux:**
+```bash
 BACKEND_PORT=9000 FRONTEND_PORT=4000 VITE_API_BASE=http://localhost:9000 docker compose up --build
 ```
+**Docker — Windows (PowerShell):**
+```powershell
+$env:BACKEND_PORT="9000"; $env:FRONTEND_PORT="4000"; $env:VITE_API_BASE="http://localhost:9000"; docker compose up --build
+```
+(The frontend is built as static assets, so it needs to know the backend's URL *at build time* — always pass a matching `VITE_API_BASE` alongside a custom `BACKEND_PORT`.)
 
-**Without Docker:**
-```
+**Without Docker — macOS/Linux:**
+```bash
 ./venv/bin/uvicorn app.main:app --reload --port 9000
-```
-```
 npm run dev -- --port 4000
 ```
-If the backend isn't on the default `8000`, point the frontend at it via `frontend/.env` (copy from `frontend/.env.example`) or inline: `VITE_API_BASE=http://localhost:9000 npm run dev`.
+**Without Docker — Windows (PowerShell):**
+```powershell
+.\venv\Scripts\uvicorn.exe app.main:app --reload --port 9000
+npm run dev -- --port 4000
+```
+If the backend isn't on the default `8000`, point the frontend at it via `frontend/.env` (copy from `frontend/.env.example`) or inline — `VITE_API_BASE=http://localhost:9000 npm run dev` (macOS/Linux) / `$env:VITE_API_BASE="http://localhost:9000"; npm run dev` (Windows PowerShell).
 
 ## Running without Docker
 
-**Backend:**
-```
+**Backend — macOS/Linux:**
+```bash
 cd backend
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
@@ -73,9 +90,21 @@ python3 -m venv venv
 cp .env.example .env                     # then fill in ENCRYPTION_KEY as above
 ./venv/bin/uvicorn app.main:app --reload
 ```
+
+**Backend — Windows (PowerShell):**
+```powershell
+cd backend
+python -m venv venv
+.\venv\Scripts\pip.exe install -r requirements.txt
+.\venv\Scripts\playwright.exe install chromium   # one-time: downloads the headless browser
+Copy-Item .env.example .env                  # then fill in ENCRYPTION_KEY as above
+.\venv\Scripts\uvicorn.exe app.main:app --reload
+```
+(These call the venv's executables directly rather than "activating" it first, so it works the same whether or not PowerShell's script execution policy allows running `Activate.ps1` — one less thing to troubleshoot. If `python` isn't found, you likely installed Python without checking "Add python.exe to PATH"; re-run the installer and check that box, or use the `py` launcher instead: `py -m venv venv`.)
+
 Backend runs at http://localhost:8000.
 
-**Frontend** (in a second terminal):
+**Frontend** (in a second terminal, same on every OS):
 ```
 cd frontend
 npm install
@@ -89,7 +118,7 @@ Once both services are running, open the frontend and:
 
 1. **Sites → + Add site** — give it a name, base URL, and check interval.
 2. On the site's page, add a **demo account** (label, username, password) — a real but low-privilege login the checker will use.
-3. Fill in the **login flow** as JSON steps (`navigate`, `click`, `fill`, `wait_for_selector`, `assert_selector_absent`, …) — use `{{username}}` / `{{password}}` in `fill` steps. Optionally add AJAX URL patterns to watch for 4xx/5xx responses.
+3. Fill in the **testing flow** as JSON steps (`navigate`, `click`, `fill`, `wait_for_selector`, `assert_selector_absent`, `assert_text_contains`, …) — use `{{username}}` / `{{password}}` in `fill` steps, or record it by clicking through the real site instead of writing JSON by hand. Optionally add AJAX URL patterns to watch for 4xx/5xx responses.
 4. Under **Alert channels**, add a Slack webhook or email recipients, optionally marking one as default.
 5. Click **Run now** on the site to trigger an immediate check and confirm the flow works before waiting for the schedule.
 
@@ -108,7 +137,7 @@ For a full worked example — a real SSO login flow, an annotated flow JSON, rea
 | `DEFAULT_STEP_TIMEOUT_MS` | Per-step timeout in a flow (can be overridden per step) | `300000` |
 | `SCREENSHOT_RETENTION_DAYS` | How long screenshot *files* are kept before being deleted (run history/status is kept regardless) | `180` (6 months) |
 
-Every check now captures a screenshot after each step (not just on failure), so screenshots are pruned automatically once a day — anything older than `SCREENSHOT_RETENTION_DAYS` gets its image file deleted (the run's pass/fail history stays). To trigger a sweep on demand instead of waiting for the daily cycle, or to run it with a different cutoff just once:
+Every check now captures a screenshot after each step (not just on failure), so screenshots are pruned automatically once a day — anything older than `SCREENSHOT_RETENTION_DAYS` gets its image file deleted (the run's pass/fail history stays). To trigger a sweep on demand instead of waiting for the daily cycle, or to run it with a different cutoff just once (`curl` ships with Windows 10/11 by default too, so this command is the same everywhere):
 ```
 curl -X POST "http://localhost:8000/api/screenshots/cleanup"        # uses SCREENSHOT_RETENTION_DAYS
 curl -X POST "http://localhost:8000/api/screenshots/cleanup?days=30" # one-off override
@@ -116,12 +145,18 @@ curl -X POST "http://localhost:8000/api/screenshots/cleanup?days=30" # one-off o
 
 ## Tests
 
-```
+```bash
+# macOS/Linux
 cd backend
 ./venv/bin/pytest tests/
 ```
+```powershell
+# Windows (PowerShell)
+cd backend
+.\venv\Scripts\pytest.exe tests\
+```
 
-Covers the flow step executor and the alert dispatcher's state machine (fail-every-time, recover-once, silent-on-repeat-success).
+Reads `ENCRYPTION_KEY` from `backend/.env` the same way the app does, so no extra setup is needed beyond the Quick start step above. Covers the flow step executor and the alert dispatcher's state machine (fail-every-time, recover-once, silent-on-repeat-success).
 
 ## Project structure
 
@@ -147,6 +182,9 @@ docker-compose.yml
 ## Troubleshooting
 
 - **`ENCRYPTION_KEY` errors on startup** — `.env` is missing or the key wasn't generated/pasted in; see step 1 above.
-- **Docker build hangs or fails to connect** — Docker Desktop isn't running; start it first.
-- **Checks fail with a browser launch error (non-Docker)** — run `./venv/bin/playwright install chromium` once inside the backend venv.
+- **Docker build hangs or fails to connect** — Docker Desktop isn't running; start it first. On Windows, also confirm Docker Desktop is set to use the **WSL2 backend** (Settings → General) — the older Hyper-V backend is no longer the default and can behave differently.
+- **Checks fail with a browser launch error (non-Docker)** — run `./venv/bin/playwright install chromium` (macOS/Linux) or `.\venv\Scripts\playwright.exe install chromium` (Windows) once inside the backend venv.
 - **Frontend loads but shows fetch/network errors** — the backend isn't running or `VITE_API_BASE` doesn't match where it's listening.
+- **Windows: `python` / `pip` not recognized** — Python wasn't added to `PATH` during install. Re-run the Python installer and check "Add python.exe to PATH", or use the `py` launcher instead (`py -m venv venv`).
+- **Windows: `running scripts is disabled on this system`** — this only happens if you try to `venv\Scripts\Activate.ps1` directly; the commands above avoid that by calling `.\venv\Scripts\<tool>.exe` directly instead of activating the venv first, so it isn't necessary to change PowerShell's execution policy.
+- **Windows: `cp`, `source`, or `VAR=value command` not recognized** — those are bash/zsh syntax; use the Windows (PowerShell) command shown alongside each step instead (`Copy-Item`, calling the venv executable directly, `$env:VAR="value"; command`).

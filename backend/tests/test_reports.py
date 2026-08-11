@@ -94,3 +94,45 @@ def test_report_filename_sanitizes_the_site_name(db_session):
     assert name.startswith("Kiran_Chenna_Prod_report_")
     assert name.endswith(".xlsx")
     assert " " not in name
+
+
+def test_status_filter_narrows_the_raw_log_to_just_that_status(db_session):
+    site = _seed(db_session)
+    buffer = build_site_report(db_session, site, status_filter=models.RunStatus.fail)
+    wb = load_workbook(buffer)
+
+    statuses = [row[4].value for row in wb["Check Runs"].iter_rows(min_row=2)]
+    assert statuses == ["FAIL", "FAIL"]
+
+
+def test_status_filter_does_not_distort_the_status_changes_timeline(db_session):
+    """Filtering the raw log to only FAIL runs must not merge the two real up/down/up periods
+    into one continuous outage -- that would misrepresent what actually happened."""
+    site = _seed(db_session)
+    buffer = build_site_report(db_session, site, status_filter=models.RunStatus.fail)
+    wb = load_workbook(buffer)
+
+    rows = list(wb["Status Changes"].iter_rows(min_row=2, values_only=True))
+    assert len(rows) == 3
+    assert [r[1] for r in rows] == ["SUCCESS", "FAIL", "SUCCESS"]
+
+
+def test_date_range_filters_out_runs_before_and_after_the_window(db_session):
+    site = _seed(db_session)
+    buffer = build_site_report(
+        db_session,
+        site,
+        start_date=datetime(2026, 1, 1, 9, 20),
+        end_date=datetime(2026, 1, 1, 9, 50),
+    )
+    wb = load_workbook(buffer)
+
+    started_ats = [row[0] for row in wb["Check Runs"].iter_rows(min_row=2, values_only=True)]
+    assert started_ats == ["2026-01-01 09:30:00", "2026-01-01 09:45:00"]
+
+
+def test_report_filename_reflects_the_status_filter(db_session):
+    site = _seed(db_session)
+    name = report_filename(site, status_filter=models.RunStatus.fail)
+    assert name.startswith("Kiran_Chenna_Prod_report_fail_")
+    assert name.endswith(".xlsx")

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app import models, retention, schemas
@@ -9,15 +9,17 @@ from app.db import get_db
 router = APIRouter(tags=["runs"])
 
 
-@router.get("/api/sites/{site_id}/runs", response_model=list[schemas.CheckRunOut])
-def list_runs(site_id: int, limit: int = 50, db: Session = Depends(get_db)):
-    return (
-        db.query(models.CheckRun)
-        .filter(models.CheckRun.site_id == site_id)
-        .order_by(models.CheckRun.started_at.desc())
-        .limit(limit)
-        .all()
-    )
+@router.get("/api/sites/{site_id}/runs", response_model=schemas.PaginatedRunsOut)
+def list_runs(
+    site_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.CheckRun).filter(models.CheckRun.site_id == site_id).order_by(models.CheckRun.started_at.desc())
+    total = query.count()
+    items = query.offset(offset).limit(limit).all()
+    return schemas.PaginatedRunsOut(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/api/runs/{run_id}", response_model=schemas.CheckRunDetailOut)

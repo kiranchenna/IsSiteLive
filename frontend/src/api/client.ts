@@ -1,9 +1,9 @@
 import type {
   Account,
   AlertChannel,
-  CheckRun,
   CheckRunDetail,
   Flow,
+  PaginatedRuns,
   Site,
   SiteStatus,
 } from "../types";
@@ -61,7 +61,8 @@ export const api = {
     }),
 
   // runs
-  listRuns: (siteId: number, limit = 50) => request<CheckRun[]>(`/api/sites/${siteId}/runs?limit=${limit}`),
+  listRuns: (siteId: number, limit = 50, offset = 0) =>
+    request<PaginatedRuns>(`/api/sites/${siteId}/runs?limit=${limit}&offset=${offset}`),
   getRun: (id: number) => request<CheckRunDetail>(`/api/runs/${id}`),
   dashboardStatus: () => request<SiteStatus[]>("/api/dashboard/status"),
 
