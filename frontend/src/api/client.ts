@@ -8,7 +8,7 @@ import type {
   SiteStatus,
 } from "../types";
 
-const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:28743";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {

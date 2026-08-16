@@ -2,7 +2,7 @@ services:
   backend:
     build: ./backend
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${BACKEND_PORT:-28743}:28743"
     env_file:
       - ./backend/.env
     volumes:
@@ -13,7 +13,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8000}
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:28743}
     ports:
       - "${FRONTEND_PORT:-5173}:80"
     depends_on:

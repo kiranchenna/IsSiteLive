@@ -37,25 +37,25 @@ Supported on macOS, Linux, and Windows. Commands below are given for **macOS/Lin
 3. Open the app:
 
    - Frontend (dashboard + admin UI): http://localhost:5173
-   - Backend API docs (Swagger UI): http://localhost:8000/docs
+   - Backend API docs (Swagger UI): http://localhost:28743/docs
 
    Data (SQLite file + failure screenshots) persists in a named Docker volume across restarts.
 
    To point the frontend at a non-localhost backend (e.g. deploying to a server), set `VITE_API_BASE` before building:
    ```bash
    # macOS/Linux
-   VITE_API_BASE=https://your-host:8000 docker compose up --build
+   VITE_API_BASE=https://your-host:28743 docker compose up --build
    ```
    ```powershell
    # Windows (PowerShell)
-   $env:VITE_API_BASE="https://your-host:8000"; docker compose up --build
+   $env:VITE_API_BASE="https://your-host:28743"; docker compose up --build
    ```
 
 Stop everything with `docker compose down` (add `-v` only if you also want to wipe stored data).
 
 ### Using custom ports
 
-By default the backend listens on `8000` and the frontend on `5173` (both configurable). The simplest cross-platform way is a `.env` file in the project root (Docker Compose reads it automatically) with `BACKEND_PORT=9000` / `FRONTEND_PORT=4000` / `VITE_API_BASE=http://localhost:9000` — then just run `docker compose up --build` as usual. Or set them inline for one run:
+By default the backend listens on `28743` and the frontend on `5173` (both configurable, chosen to avoid the usual dev-server defaults like 3000/8000/8080). The simplest cross-platform way is a `.env` file in the project root (Docker Compose reads it automatically) with `BACKEND_PORT=9000` / `FRONTEND_PORT=4000` / `VITE_API_BASE=http://localhost:9000` — then just run `docker compose up --build` as usual. Or set them inline for one run:
 
 **Docker — macOS/Linux:**
 ```bash
@@ -77,7 +77,7 @@ npm run dev -- --port 4000
 .\venv\Scripts\uvicorn.exe app.main:app --reload --port 9000
 npm run dev -- --port 4000
 ```
-If the backend isn't on the default `8000`, point the frontend at it via `frontend/.env` (copy from `frontend/.env.example`) or inline — `VITE_API_BASE=http://localhost:9000 npm run dev` (macOS/Linux) / `$env:VITE_API_BASE="http://localhost:9000"; npm run dev` (Windows PowerShell).
+If the backend isn't on the default `28743`, point the frontend at it via `frontend/.env` (copy from `frontend/.env.example`) or inline — `VITE_API_BASE=http://localhost:9000 npm run dev` (macOS/Linux) / `$env:VITE_API_BASE="http://localhost:9000"; npm run dev` (Windows PowerShell).
 
 ## Running without Docker
 
@@ -88,7 +88,7 @@ python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ./venv/bin/playwright install chromium   # one-time: downloads the headless browser
 cp .env.example .env                     # then fill in ENCRYPTION_KEY as above
-./venv/bin/uvicorn app.main:app --reload
+./venv/bin/uvicorn app.main:app --reload --port 28743
 ```
 
 **Backend — Windows (PowerShell):**
@@ -98,11 +98,13 @@ python -m venv venv
 .\venv\Scripts\pip.exe install -r requirements.txt
 .\venv\Scripts\playwright.exe install chromium   # one-time: downloads the headless browser
 Copy-Item .env.example .env                  # then fill in ENCRYPTION_KEY as above
-.\venv\Scripts\uvicorn.exe app.main:app --reload
+.\venv\Scripts\uvicorn.exe app.main:app --reload --port 28743
 ```
 (These call the venv's executables directly rather than "activating" it first, so it works the same whether or not PowerShell's script execution policy allows running `Activate.ps1` — one less thing to troubleshoot. If `python` isn't found, you likely installed Python without checking "Add python.exe to PATH"; re-run the installer and check that box, or use the `py` launcher instead: `py -m venv venv`.)
 
-Backend runs at http://localhost:8000.
+`UVICORN_PORT` is read directly by uvicorn's own CLI (it auto-derives environment variables from every `--flag`, e.g. `--port` ⟷ `UVICORN_PORT`) -- this happens before the app or its `.env` file is ever loaded, which is why the port can't just be a setting inside the app itself. Without it set, plain `uvicorn app.main:app --reload` falls back to uvicorn's own default of port `8000`, not `28743`.
+
+Backend runs at http://localhost:28743.
 
 **Frontend** (in a second terminal, same on every OS):
 ```
@@ -110,7 +112,7 @@ cd frontend
 npm install
 npm run dev
 ```
-Frontend runs at http://localhost:5173 and expects the backend at `http://localhost:8000` by default (override via a `VITE_API_BASE` env var or `frontend/.env`, see `frontend/.env.example`).
+Frontend runs at http://localhost:5173 and expects the backend at `http://localhost:28743` by default (override via a `VITE_API_BASE` env var or `frontend/.env`, see `frontend/.env.example`).
 
 ## First-time walkthrough
 
@@ -139,8 +141,8 @@ For a full worked example — a real SSO login flow, an annotated flow JSON, rea
 
 Every check now captures a screenshot after each step (not just on failure), so screenshots are pruned automatically once a day — anything older than `SCREENSHOT_RETENTION_DAYS` gets its image file deleted (the run's pass/fail history stays). To trigger a sweep on demand instead of waiting for the daily cycle, or to run it with a different cutoff just once (`curl` ships with Windows 10/11 by default too, so this command is the same everywhere):
 ```
-curl -X POST "http://localhost:8000/api/screenshots/cleanup"        # uses SCREENSHOT_RETENTION_DAYS
-curl -X POST "http://localhost:8000/api/screenshots/cleanup?days=30" # one-off override
+curl -X POST "http://localhost:28743/api/screenshots/cleanup"        # uses SCREENSHOT_RETENTION_DAYS
+curl -X POST "http://localhost:28743/api/screenshots/cleanup?days=30" # one-off override
 ```
 
 ## Tests
